@@ -1,0 +1,8 @@
+import Link from 'next/link';
+import type { City } from '../../lib/public-restaurants';
+import { CitySelector } from './CitySelector';
+import { SearchBar } from './SearchBar';
+
+export function Header(props: { cities: City[]; city: string; onCityChange: (value: string) => void; search: string; onSearchChange: (value: string) => void }) {
+  return <header className="border-b border-stone-200 bg-[#fbfcf8]"><div className="mx-auto max-w-7xl px-4 py-5 sm:px-6"><div className="flex items-center justify-between gap-4"><Link href="/" className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-ink text-lg font-black text-lime">M</span><span><b className="block text-base tracking-[.14em] text-ink">MENU FLOW</b><small className="hidden text-stone-500 sm:block">Sua cidade, muitos sabores</small></span></Link><Link className="rounded-xl bg-ink px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5" href="/login">Entrar</Link></div><div className="mt-5 grid gap-3 md:grid-cols-[minmax(220px,.65fr)_1.35fr]"><CitySelector cities={props.cities} value={props.city} onChange={props.onCityChange} /><SearchBar value={props.search} onChange={props.onSearchChange} /></div></div></header>;
+}

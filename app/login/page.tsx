@@ -1,0 +1,35 @@
+'use client';
+
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { dashboardForRole, Role, saveSession } from '../../lib/auth';
+import { apiUrl } from '../../lib/api';
+
+export default function HomePage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!email.trim() || !password) { setError('Informe seu e-mail e senha para entrar.'); return; }
+    setLoading(true); setError('');
+    try {
+      const response = await fetch(apiUrl('/auth/login'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const body = await response.json().catch(() => null) as { accessToken?: string; user?: { id: string; name: string; role: Role; restaurantId?: string }; message?: string | string[] } | null;
+      if (!response.ok || !body?.accessToken || !body.user || !(body.user.role in dashboardForRole)) {
+        setError(response.status === 401 ? 'E-mail ou senha inválidos. Verifique seus dados e tente novamente.' : Array.isArray(body?.message) ? body.message[0] : body?.message ?? 'Não foi possível entrar. Tente novamente.');
+        return;
+      }
+      saveSession({ accessToken: body.accessToken, user: body.user });
+      router.replace(dashboardForRole[body.user.role]);
+    } catch { setError('Não foi possível conectar ao servidor. Tente novamente em instantes.'); }
+    finally { setLoading(false); }
+  }
+
+  return <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_right,_#dff5a7,_transparent_35%),linear-gradient(135deg,_#f7f8f5,_#eef1eb)] p-5"><section className="grid w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-soft lg:grid-cols-[.9fr_1.1fr]"><aside className="bg-ink p-8 text-white sm:p-12"><p className="text-sm font-black tracking-[0.24em] text-lime">MENU FLOW</p><h1 className="mt-6 text-4xl font-black leading-tight">Bem-vindo ao Menu Flow</h1><p className="mt-5 max-w-sm leading-7 text-stone-300">Entre na sua conta para continuar. Seu acesso é identificado automaticamente e direcionado para o painel correto.</p><div className="mt-10 hidden rounded-2xl border border-white/15 p-5 text-sm leading-6 text-stone-300 lg:block">Clientes podem continuar navegando e fazendo pedidos no cardápio público sem login.</div></aside><div className="p-6 sm:p-10"><p className="text-sm font-bold text-stone-500">ACESSO SEGURO</p><h2 className="mt-2 text-3xl font-black text-ink">Entre na sua conta</h2><p className="mt-3 text-stone-600">Use seu e-mail e senha. Não é necessário escolher um perfil.</p><form className="mt-7" onSubmit={login}><label className="font-bold" htmlFor="email">E-mail</label><input className="field" id="email" name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@empresa.com" required /><label className="mt-5 block font-bold" htmlFor="password">Senha</label><input className="field" id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-700" role="alert">{error}</p>}<button disabled={loading} className="mt-6 w-full rounded-xl bg-ink py-4 font-black text-white transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-60" type="submit">{loading ? 'ENTRANDO…' : 'ENTRAR'}</button><button type="button" className="mt-4 w-full text-sm font-bold text-stone-600 hover:text-ink">Esqueci minha senha</button><p className="mt-6 text-center text-sm text-stone-600">Não possui uma conta? <a className="font-bold text-ink underline" href="/cliente/login">Sou cliente</a></p></form></div></section></main>;
+}
