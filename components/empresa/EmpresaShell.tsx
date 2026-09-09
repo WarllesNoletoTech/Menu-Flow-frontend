@@ -1,0 +1,3 @@
+'use client';
+import { ReactNode, useCallback, useState } from 'react'; import { EmpresaProvider } from './EmpresaContext'; import { EmpresaHeader } from './EmpresaHeader'; import { EmpresaSidebar } from './EmpresaSidebar';
+export function EmpresaShell({children}:{children:ReactNode}) { const [open,setOpen]=useState(false); const close=useCallback(()=>setOpen(false),[]); return <EmpresaProvider><div className="min-h-screen bg-stone-100 lg:pl-[270px]"><EmpresaSidebar open={open} close={close}/><EmpresaHeader menuOpen={open} toggle={()=>setOpen(v=>!v)}/><main className="p-4 sm:p-7">{children}</main></div></EmpresaProvider>; }
