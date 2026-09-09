@@ -9,7 +9,7 @@ import { UserMenu } from './auth/UserMenu';
 type Category = { _id: string; name: string };
 type Addon = { name: string; price: number };
 type AddonGroup = { name: string; required: boolean; min: number; max: number; addons: Addon[] };
-type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId: string; addonGroups?: AddonGroup[] };
+type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string; addonGroups?: AddonGroup[] };
 type Restaurant = { _id: string; name: string; tradeName?: string; description?: string; bannerUrl?: string; logoUrl?: string; open: boolean; establishmentType?: string; city?: string; state?: string };
 type CartItem = Product & { quantity: number; addonNames: string[] };
 type StoredCartItem = { productId: string; quantity: number; addonNames: string[] };
@@ -88,6 +88,17 @@ export function Menu({ slug }: { slug: string }) {
     .filter((addon) => names.includes(addon.name))
     .reduce((total, addon) => total + addon.price, 0);
   const subtotal = useMemo(() => cart.reduce((total, item) => total + ((item.promotionalPrice ?? item.price) + addonPrice(item, item.addonNames)) * item.quantity, 0), [cart]);
+  const visibleCategories = useMemo(() => {
+    const categoryIds = new Set(categories.map((category) => category._id));
+    const sections = categories.flatMap((category) => {
+      const categoryProducts = products.filter((product) => product.categoryId === category._id);
+      return categoryProducts.length ? [{ ...category, products: categoryProducts }] : [];
+    });
+    const uncategorizedProducts = products.filter((product) => !product.categoryId || !categoryIds.has(product.categoryId));
+    return uncategorizedProducts.length
+      ? [...sections, { _id: 'outros', name: 'Outros', products: uncategorizedProducts }]
+      : sections;
+  }, [categories, products]);
   const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
   const add = (product: Product, addonNames: string[] = []) => setCart((items) => {
     const found = items.find((item) => item._id === product._id && item.addonNames.join('|') === addonNames.join('|'));
@@ -133,17 +144,18 @@ export function Menu({ slug }: { slug: string }) {
       <MenuHeader restaurant={restaurant} slug={slug} />
       <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)] lg:px-8 lg:py-8">
         <div className="min-w-0">
+          {products.length === 0 ? <EmptyMenu /> : <>
           <nav aria-label="Categorias" className="scrollbar-none sticky top-0 z-20 -mx-4 flex gap-2 overflow-x-auto bg-stone-100/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:px-3">
-            {categories.map((category) => <a key={category._id} href={`#${category._id}`} className="min-h-11 shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-3 text-sm font-bold shadow-sm">{category.name}</a>)}
+            {visibleCategories.map((category) => <a key={category._id} href={`#${category._id}`} className="min-h-11 shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-3 text-sm font-bold shadow-sm">{category.name}</a>)}
           </nav>
-          {categories.map((category) => (
+          {visibleCategories.map((category) => (
             <section id={category._id} key={category._id} className="scroll-mt-20 pt-7">
               <h2 className="text-xl font-black sm:text-2xl">{category.name}</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {products.filter((product) => product.categoryId === category._id).map((product) => <ProductCard key={product._id} product={product} open={restaurant.open} add={() => product.addonGroups?.length ? (setSelectedProduct(product), setSelectedAddons([])) : add(product)} />)}
+                {category.products.map((product) => <ProductCard key={product._id} product={product} open={restaurant.open} add={() => product.addonGroups?.length ? (setSelectedProduct(product), setSelectedAddons([])) : add(product)} />)}
               </div>
             </section>
-          ))}
+          ))}</>}
         </div>
         <aside className="hidden lg:block"><div className="sticky top-24"><CartPanel cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} checkout={() => setCheckout(true)} /></div></aside>
       </div>
@@ -156,9 +168,10 @@ export function Menu({ slug }: { slug: string }) {
 
 function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string }) {
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
-  return <header className="relative mx-auto min-h-[240px] w-full max-w-7xl overflow-hidden bg-gradient-to-br from-ink via-[#284436] to-[#698417] sm:min-h-[280px] lg:mt-6 lg:min-h-[360px] lg:rounded-3xl" style={restaurant.bannerUrl ? { backgroundImage: `linear-gradient(90deg,rgba(23,32,27,.88),rgba(23,32,27,.38)),url(${restaurant.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-    <UserMenu returnTo={`/${slug}`} className="absolute right-4 top-4 z-40 sm:right-6 sm:top-6" />
-    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent p-5 pt-20 text-white sm:p-8 lg:p-10">
+  const background = restaurant.bannerUrl ? { backgroundImage: `linear-gradient(90deg,rgba(23,32,27,.88),rgba(23,32,27,.38)),url(${restaurant.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined;
+  return <header className="relative mx-auto w-full max-w-7xl lg:mt-6">
+    <div className="relative min-h-[240px] overflow-hidden bg-gradient-to-br from-ink via-[#284436] to-[#698417] sm:min-h-[280px] lg:min-h-[360px] lg:rounded-3xl" style={background}>
+    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent p-5 pt-20 text-white sm:p-8 sm:pr-72 lg:p-10 lg:pr-80">
       <div className="flex items-end gap-4 sm:gap-6">
         {restaurant.logoUrl ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-20 w-20 shrink-0 rounded-2xl border-4 border-white bg-white object-cover shadow-xl lg:h-24 lg:w-24" /> : <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border-4 border-white bg-lime text-3xl font-black text-ink shadow-xl lg:h-24 lg:w-24">{restaurant.name.charAt(0)}</span>}
         <div className="min-w-0 pb-1">
@@ -169,7 +182,16 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
         </div>
       </div>
     </div>
+    </div>
+    <div className="absolute right-4 top-4 z-50 sm:right-6 sm:top-6"><UserMenu returnTo={`/${slug}`} /></div>
   </header>;
+}
+
+function EmptyMenu() {
+  return <section className="mt-3 min-h-72 rounded-3xl border border-stone-200 bg-white px-6 py-10 text-center shadow-sm sm:mt-0 sm:min-h-80 sm:px-10 sm:py-14">
+    <p className="text-left text-2xl font-black">Cardápio</p>
+    <div className="mx-auto mt-8 max-w-md"><span className="text-5xl" aria-hidden>🍽️</span><h2 className="mt-4 text-lg font-black sm:text-xl">Este estabelecimento ainda não possui produtos disponíveis.</h2><p className="mt-2 text-stone-500">Volte em breve.</p></div>
+  </section>;
 }
 
 function ProductCard({ product, open, add }: { product: Product; open: boolean; add: () => void }) {
