@@ -172,19 +172,22 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
     <div className="flex min-h-16 items-center justify-end px-4 py-2 sm:px-6 lg:px-0">
       <UserMenu returnTo={`/${slug}`} />
     </div>
-    <div className="relative">
-      <div className="h-[190px] overflow-hidden bg-stone-200 sm:h-[240px] sm:rounded-t-3xl lg:h-[300px] lg:rounded-3xl">
+    <div className="relative lg:px-8">
+      <div className="relative h-[190px] overflow-hidden bg-stone-200 sm:h-[250px] sm:rounded-t-3xl lg:h-[clamp(280px,22vw,340px)] lg:rounded-3xl">
         {restaurant.bannerUrl
-          ? <img src={restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-cover" />
+          ? <>
+            <img src={restaurant.bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 hidden h-full w-full scale-110 object-cover blur-2xl brightness-75 lg:block" />
+            <img src={restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="relative h-full w-full object-cover sm:object-center lg:object-contain" />
+          </>
           : <div className="h-full w-full bg-stone-200" role="img" aria-label={`${restaurant.name} não possui banner cadastrado`} />}
       </div>
-      <div className="absolute -bottom-9 left-4 sm:-bottom-11 sm:left-8 lg:-bottom-12">
+      <div className="absolute -bottom-9 left-4 sm:-bottom-11 sm:left-8 lg:-bottom-14 lg:left-16">
         {restaurant.logoUrl
-          ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-[76px] w-[76px] rounded-2xl border border-border bg-white p-1.5 object-contain shadow-soft sm:h-[92px] sm:w-[92px] lg:h-[104px] lg:w-[104px] lg:rounded-3xl" />
-          : <span className="grid h-[76px] w-[76px] place-items-center rounded-2xl border border-border bg-white text-2xl font-black text-ink shadow-soft sm:h-[92px] sm:w-[92px] sm:text-3xl lg:h-[104px] lg:w-[104px] lg:rounded-3xl">{restaurant.name.charAt(0)}</span>}
+          ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-[76px] w-[76px] rounded-2xl border border-border bg-white p-1.5 object-contain shadow-soft ring-4 ring-background sm:h-[92px] sm:w-[92px] lg:h-[116px] lg:w-[116px] lg:rounded-3xl lg:p-2" />
+          : <span className="grid h-[76px] w-[76px] place-items-center rounded-2xl border border-border bg-white text-2xl font-black text-ink shadow-soft ring-4 ring-background sm:h-[92px] sm:w-[92px] sm:text-3xl lg:h-[116px] lg:w-[116px] lg:rounded-3xl lg:text-4xl">{restaurant.name.charAt(0)}</span>}
       </div>
     </div>
-    <div className="px-4 pb-1 pt-12 sm:px-8 sm:pt-14 lg:pt-16">
+    <div className="px-4 pb-1 pt-12 sm:px-8 sm:pt-14 lg:px-16 lg:pt-20">
       <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
         <h1 className="min-w-0 break-words text-2xl font-black leading-tight sm:text-3xl lg:text-4xl">{restaurant.tradeName || restaurant.name}</h1>
         <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${restaurant.open ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>{restaurant.open ? 'ABERTO AGORA' : 'FECHADO'}</span>
