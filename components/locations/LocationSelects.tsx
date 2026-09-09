@@ -1,0 +1,8 @@
+'use client';
+import { useEffect, useState } from 'react'; import { apiUrl } from '../../lib/api';
+type State = { id: number; name: string; uf: string }; type City = { id: number; name: string };
+export function LocationSelects({ state, city, onState, onCity }: { state: string; city: string; onState: (value: string) => void; onCity: (value: string) => void }) { const [states, setStates] = useState<State[]>([]); const [cities, setCities] = useState<City[]>([]); const [loading, setLoading] = useState(false);
+  useEffect(() => { void fetch(apiUrl('/locations/states')).then((response) => response.ok ? response.json() : Promise.reject()).then((items: State[]) => setStates(items)).catch(() => setStates([])); }, []);
+  useEffect(() => { if (!state) { setCities([]); return; } setLoading(true); void fetch(apiUrl(`/locations/states/${encodeURIComponent(state)}/cities`)).then((response) => response.ok ? response.json() : Promise.reject()).then((items: City[]) => setCities(items)).catch(() => setCities([])).finally(() => setLoading(false)); }, [state]);
+  return <><label className="font-bold">Estado<select required className="field" value={state} onChange={(e) => { onState(e.target.value); onCity(''); }}><option value="">Selecione o estado</option>{states.map((item) => <option key={item.id} value={item.uf}>{item.name} ({item.uf})</option>)}</select></label><label className="font-bold">Cidade<select required disabled={!state || loading} className="field" value={city} onChange={(e) => onCity(e.target.value)}><option value="">{loading ? 'Carregando municípios…' : 'Selecione a cidade'}</option>{cities.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label></>;
+}
