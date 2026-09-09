@@ -8,6 +8,7 @@ const content: Record<Role, { eyebrow: string; title: string; description: strin
   SUPER_ADMIN: { eyebrow: 'ADMINISTRAÇÃO DA PLATAFORMA', title: 'Painel do administrador', description: 'Gerencie restaurantes, usuários e a operação da plataforma Menu Flow.' },
   RESTAURANT_ADMIN: { eyebrow: 'GESTÃO DO RESTAURANTE', title: 'Painel da empresa', description: 'Acesse os recursos e dados exclusivos do seu restaurante.' },
   EMPLOYEE: { eyebrow: 'OPERAÇÃO DO RESTAURANTE', title: 'Painel do funcionário', description: 'Acompanhe as tarefas e pedidos permitidos para o seu perfil.' },
+  CUSTOMER: { eyebrow: 'MINHA CONTA', title: 'Área do cliente', description: 'Consulte seus pedidos, endereços e dados da sua conta.' },
 };
 
 export function ProtectedDashboard({ role }: { role: Role }) {
