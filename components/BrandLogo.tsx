@@ -1,20 +1,49 @@
+import Image from 'next/image';
+
 type BrandLogoProps = {
-  variant?: 'full' | 'symbol';
+  variant?: 'full' | 'wordmark' | 'symbol';
   className?: string;
   priority?: boolean;
 };
 
+const assets = {
+  full: {
+    src: '/assets/branding/menu-flow-logo.png',
+    width: 1005,
+    height: 795,
+    alt: 'Menu Flow — Cardápios mais simples, clientes mais felizes',
+  },
+  wordmark: {
+    src: '/assets/branding/menu-flow-wordmark.png',
+    width: 980,
+    height: 193,
+    alt: 'Menu Flow',
+  },
+  symbol: {
+    src: '/assets/branding/menu-flow-symbol.png',
+    width: 512,
+    height: 512,
+    alt: 'Menu Flow',
+  },
+} as const;
+
 export function BrandLogo({ variant = 'full', className = '', priority = false }: BrandLogoProps) {
-  const symbol = variant === 'symbol';
-  return <span
-    aria-label={symbol ? 'Menu Flow' : 'Menu Flow — Cardápios mais simples, clientes mais felizes'}
-    data-priority={priority || undefined}
-    className={`inline-flex max-w-full items-center gap-2 rounded-xl bg-surface px-2 py-2 ${className}`}
-  >
-    <span aria-hidden className="grid aspect-square w-11 shrink-0 place-items-center rounded-xl bg-primary font-black text-white shadow-sm">MF</span>
-    {!symbol && <span className="min-w-0 leading-none">
-      <strong className="block whitespace-nowrap font-serif text-xl font-bold tracking-tight text-primary">Menu Flow</strong>
-      <small className="mt-1 block whitespace-nowrap text-[.42rem] font-bold uppercase tracking-[.12em] text-text-secondary">Cardápios mais simples&nbsp; Clientes mais felizes</small>
-    </span>}
-  </span>;
+  const asset = assets[variant];
+
+  return (
+    <span
+      data-priority={priority || undefined}
+      className={`inline-block max-w-full overflow-hidden bg-[#fefbf4] align-middle ${className}`}
+    >
+      <Image
+        src={asset.src}
+        width={asset.width}
+        height={asset.height}
+        alt={asset.alt}
+        priority={priority}
+        sizes={variant === 'full' ? '(max-width: 640px) 70vw, 260px' : variant === 'wordmark' ? '220px' : '64px'}
+        className="block h-auto w-full object-contain"
+      />
+    </span>
+  );
 }

@@ -1,1 +1,1 @@
-{"name":"Menu Flow","short_name":"Menu Flow","start_url":"/","display":"standalone","background_color":"#F8F5F0","theme_color":"#221C1A","description":"Cardápio digital rápido e fácil de usar."}
+{"name":"Menu Flow","short_name":"Menu Flow","start_url":"/","display":"standalone","background_color":"#F8F5F0","theme_color":"#221C1A","description":"Cardápio digital rápido e fácil de usar.","icons":[{"src":"/assets/branding/menu-flow-icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/assets/branding/menu-flow-icon-512.png","sizes":"512x512","type":"image/png"}]}
