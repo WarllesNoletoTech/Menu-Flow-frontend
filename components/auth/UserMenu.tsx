@@ -7,10 +7,10 @@ import type { Role } from '../../lib/auth';
 import { useAuth } from '../AuthProvider';
 
 const links: Record<Role, Array<{ label: string; href: string }>> = {
-  CUSTOMER: [{ label: 'Minha conta', href: '/cliente#conta' }, { label: 'Meus pedidos', href: '/cliente' }, { label: 'Meus endereços', href: '/cliente#enderecos' }],
+  CUSTOMER: [{ label: 'Minha conta', href: '/cliente/conta' }, { label: 'Meus pedidos', href: '/cliente/pedidos' }, { label: 'Meus endereços', href: '/cliente/enderecos' }],
   RESTAURANT_ADMIN: [{ label: 'Minha conta', href: '/empresa#conta' }, { label: 'Painel da loja', href: '/empresa' }, { label: 'Pedidos e catálogo', href: '/empresa#operacao' }, { label: 'Funcionários e configurações', href: '/empresa#configuracoes' }],
-  EMPLOYEE: [{ label: 'Minha conta', href: '/funcionario#conta' }, { label: 'Painel do funcionário', href: '/funcionario' }, { label: 'Pedidos permitidos', href: '/funcionario#pedidos' }],
-  SUPER_ADMIN: [{ label: 'Minha conta', href: '/admin#conta' }, { label: 'Painel administrativo', href: '/admin' }, { label: 'Estabelecimentos', href: '/admin/restaurantes' }],
+  EMPLOYEE: [{ label: 'Minha conta', href: '/funcionario/conta' }, { label: 'Painel do funcionário', href: '/funcionario' }, { label: 'Pedidos permitidos', href: '/funcionario/pedidos' }],
+  SUPER_ADMIN: [{ label: 'Minha conta', href: '/admin/conta' }, { label: 'Painel administrativo', href: '/admin' }, { label: 'Estabelecimentos', href: '/admin/restaurantes' }],
 };
 
 export function UserMenu({ returnTo = '/', className = '' }: { returnTo?: string; className?: string }) {

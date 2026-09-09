@@ -1,0 +1,1 @@
+import { OrdersList } from '../../../components/dashboard/OrdersList';export default function Page(){return <section className="mx-auto max-w-6xl"><h2 className="text-2xl font-black">Pedidos</h2><p className="mt-1 text-stone-500">Pedidos do estabelecimento ao qual sua conta está vinculada.</p><OrdersList employee/></section>}

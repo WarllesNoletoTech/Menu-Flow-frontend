@@ -1,0 +1,1 @@
+import { OrdersList } from '../../../components/dashboard/OrdersList';export default function Page(){return <section className="mx-auto max-w-5xl"><h2 className="text-2xl font-black">Meus pedidos</h2><p className="mt-1 text-stone-500">Seu histórico de pedidos no Menu Flow.</p><OrdersList customer/></section>}

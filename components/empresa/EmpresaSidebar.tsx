@@ -8,6 +8,7 @@ import { useEmpresa } from './EmpresaContext';
 const links = [
   ['▦', 'Visão geral', '/empresa'], ['▤', 'Pedidos', '/empresa/pedidos'], ['▧', 'Cardápio / Produtos', '/empresa/cardapio'],
   ['▦', 'Categorias', '/empresa/categorias'], ['♙', 'Funcionários', '/empresa/funcionarios'], ['▣', 'Dados da empresa', '/empresa/dados'], ['⚙', 'Configurações', '/empresa/configuracoes'],
+  ['♙', 'Minha conta', '/empresa/conta'],
 ] as const;
 export function EmpresaSidebar({ open, close }: { open: boolean; close: () => void }) {
   const pathname = usePathname(); const router = useRouter(); const { logout } = useAuth(); const { establishment } = useEmpresa();

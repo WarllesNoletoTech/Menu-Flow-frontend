@@ -1,2 +1,3 @@
-import { ProtectedDashboard } from '../../components/protected-dashboard';
-export default function FuncionarioPage() { return <ProtectedDashboard role="EMPLOYEE" />; }
+'use client';
+import Link from 'next/link';import { useAuth } from '../../components/AuthProvider';
+export default function Page(){const {user}=useAuth();return <section className="mx-auto max-w-5xl"><div className="rounded-3xl bg-ink p-7 text-white"><p className="text-sm font-bold text-lime">ÁREA OPERACIONAL</p><h2 className="mt-2 text-2xl font-black">Olá, {user?.name.split(' ')[0]}!</h2><p className="mt-2 text-stone-300">Acompanhe os pedidos do seu estabelecimento com segurança.</p></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><Link href="/funcionario/pedidos" className="rounded-2xl bg-white p-6 font-bold shadow-sm">Ver pedidos <span className="float-right">→</span></Link><Link href="/funcionario/conta" className="rounded-2xl bg-white p-6 font-bold shadow-sm">Minha conta <span className="float-right">→</span></Link></div></section>}
