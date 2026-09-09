@@ -1,1 +1,1 @@
-import { CategoriesManager } from '../../../components/empresa/CatalogManager'; export default function Page(){return <CategoriesManager/>}
+import { redirect } from 'next/navigation';export default function Page(){redirect('/empresa/cardapio')}

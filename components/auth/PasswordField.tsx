@@ -1,0 +1,4 @@
+'use client';
+import { InputHTMLAttributes, useState } from 'react';
+type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { label?: string };
+export function PasswordField({label,className='field',...props}:Props){const [visible,setVisible]=useState(false);const input=<span className="relative block"><input {...props} type={visible?'text':'password'} className={`${className} pr-12`}/><button type="button" aria-label={visible?'Ocultar senha':'Mostrar senha'} aria-pressed={visible} onClick={()=>setVisible(value=>!value)} className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"><span aria-hidden>{visible?'◉':'◎'}</span></button></span>;return label?<label className="block font-bold">{label}{input}</label>:input}

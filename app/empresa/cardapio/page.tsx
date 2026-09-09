@@ -1,1 +1,1 @@
-import { ProductsManager } from '../../../components/empresa/CatalogManager'; export default function Page(){return <ProductsManager/>}
+import { CatalogManager } from '../../../components/empresa/CatalogManager'; export default function Page(){return <CatalogManager/>}
