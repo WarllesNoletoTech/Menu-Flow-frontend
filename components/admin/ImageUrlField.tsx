@@ -20,8 +20,8 @@ export function ImageUrlField({ label, value, onChange, type, invalid }: Props) 
       <span className="mb-1 block text-xs font-normal text-stone-500">Prévia {logo ? 'da logo' : 'do banner'}</span>
       {status !== 'failed' && <img key={value} src={value} alt={`Prévia ${logo ? 'da logo' : 'do banner'}`} onLoad={() => setStatus('loaded')} onError={() => setStatus('failed')} className={`rounded-xl border object-cover ${logo ? 'h-20 w-20' : 'h-24 w-full'}`} />}
       {status === 'loading' && <span className="block text-xs font-normal text-stone-500">Carregando imagem…</span>}
-      {status === 'loaded' && <span className="block text-xs font-bold text-green-700">✓ Imagem carregada</span>}
-      {status === 'failed' && <span className="block rounded-lg bg-red-50 p-2 text-xs font-normal text-red-700">Não foi possível carregar essa imagem. Verifique se o link é público e aponta diretamente para uma imagem.</span>}
+      {status === 'loaded' && <span className="block text-xs font-bold text-success">✓ Imagem carregada</span>}
+      {status === 'failed' && <span className="block rounded-lg bg-danger/10 p-2 text-xs font-normal text-danger">Não foi possível carregar essa imagem. Verifique se o link é público e aponta diretamente para uma imagem.</span>}
     </span>}
   </label>;
 }

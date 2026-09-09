@@ -1,11 +1,58 @@
-@tailwind base; @tailwind components; @tailwind utilities;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --mf-primary: #7a2e2e;
+  --mf-primary-hover: #5c2020;
+  --mf-accent: #d97745;
+  --mf-gold: #c79a52;
+  --mf-sidebar: #221c1a;
+  --mf-sidebar-hover: #342b27;
+  --mf-background: #f8f5f0;
+  --mf-surface: #fffdfc;
+  --mf-text-primary: #292524;
+  --mf-text-secondary: #78716c;
+  --mf-border: #e7e1d8;
+  --mf-success: #5f7a55;
+  --mf-warning: #d89a3d;
+  --mf-danger: #c2413b;
+  --mf-focus: rgb(122 46 46 / 0.2);
+}
+
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body { min-width: 0; margin: 0; background: #f7f8f5; color: #17201b; font-family: Arial, sans-serif; }
+html { scroll-behavior: smooth; background: var(--mf-background); }
+body { min-width: 0; margin: 0; overflow-x: hidden; background: var(--mf-background); color: var(--mf-text-primary); font-family: Arial, Helvetica, sans-serif; }
 button, input, select, textarea { font: inherit; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
-.shadow-soft { box-shadow: 0 10px 30px rgb(23 32 27 / .10); }
-.field { width: 100%; min-height: 2.75rem; margin-top: .75rem; border: 1px solid #e7e5e4; border-radius: .75rem; padding: .75rem 1rem; background: white; font-size: 1rem; }
-.field:focus { outline: 2px solid #b9e64b; border-color: transparent; }
+button, a { transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--mf-primary); outline-offset: 2px; }
+::selection { background: rgb(217 119 69 / .25); }
+
+.shadow-soft { box-shadow: 0 10px 30px rgb(41 37 36 / .08); }
+.field { width: 100%; min-height: 2.75rem; margin-top: .75rem; border: 1px solid var(--mf-border); border-radius: .75rem; padding: .75rem 1rem; background: var(--mf-surface); color: var(--mf-text-primary); font-size: 1rem; transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
+.field::placeholder { color: var(--mf-text-secondary); }
+.field:focus { border-color: var(--mf-primary); outline: none; box-shadow: 0 0 0 3px var(--mf-focus); }
+.field:disabled, .field[readonly] { background: #f1ede7; color: var(--mf-text-secondary); }
+input[type='checkbox'], input[type='radio'] { accent-color: var(--mf-primary); }
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+table { border-collapse: collapse; }
+thead { background: #f3eee8; color: var(--mf-text-secondary); font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+tbody tr { border-color: var(--mf-border); transition: background-color 180ms ease; }
+tbody tr:hover { background: rgb(248 245 240 / .75); }
+
+@media (max-width: 639px) {
+  h1, h2, h3, p { overflow-wrap: anywhere; }
+  dialog, [role='dialog'] { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Shared interaction semantics for legacy utility-based controls. */
+button.bg-ink:hover:not(:disabled), a.bg-ink:hover { background: var(--mf-primary-hover); }
+button.bg-danger:hover:not(:disabled), a.bg-danger:hover { filter: brightness(.9); }
+.border:not([class*='border-']) { border-color: var(--mf-border); }
+.auth-background { background: radial-gradient(circle at top right, rgb(217 119 69 / .18), transparent 35%), var(--mf-background); }

@@ -16,7 +16,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   }, [pathname,router]);
   const refreshCompany = useCallback(async () => { setLoadingCompany(true);setCompanyError('');try{const result = await request<{ establishment: Establishment; settings: Settings }>('/restaurants/me'); setEstablishment(result.establishment); setSettings(result.settings);}catch(error){setCompanyError(error instanceof Error?error.message:'Não foi possível carregar os dados do estabelecimento.');throw error}finally{setLoadingCompany(false)} }, [request]);
   useEffect(() => { if (loading) return; if (!user) { router.replace(`/login?returnTo=${encodeURIComponent(pathname)}`); return; } if (user.role !== 'RESTAURANT_ADMIN') { router.replace(dashboardForRole[user.role]); return; } void refreshCompany().catch(()=>undefined); }, [loading, pathname, refreshCompany, router, user]);
-  if (loading || !user || user.role !== 'RESTAURANT_ADMIN') return <main className="min-h-screen bg-stone-100" aria-label="Carregando painel" />;
+  if (loading || !user || user.role !== 'RESTAURANT_ADMIN') return <main className="min-h-screen bg-background" aria-label="Carregando painel" />;
   return <Context.Provider value={{ establishment, settings, loadingCompany, companyError, request, refreshCompany }}>{children}</Context.Provider>;
 }
 export function useEmpresa() { const value = useContext(Context); if (!value) throw new Error('useEmpresa deve ser usado dentro de EmpresaProvider'); return value; }
