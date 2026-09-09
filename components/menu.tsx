@@ -168,22 +168,30 @@ export function Menu({ slug }: { slug: string }) {
 
 function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string }) {
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
-  const background = restaurant.bannerUrl ? { backgroundImage: `linear-gradient(90deg,rgba(23,32,27,.88),rgba(23,32,27,.38)),url(${restaurant.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined;
-  return <header className="relative mx-auto w-full max-w-7xl lg:mt-6">
-    <div className="relative min-h-[240px] overflow-hidden bg-gradient-to-br from-ink via-primary-hover to-accent sm:min-h-[280px] lg:min-h-[360px] lg:rounded-3xl" style={background}>
-    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent p-5 pt-20 text-white sm:p-8 sm:pr-72 lg:p-10 lg:pr-80">
-      <div className="flex items-end gap-4 sm:gap-6">
-        {restaurant.logoUrl ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-20 w-20 shrink-0 rounded-2xl border-4 border-white bg-surface object-cover shadow-xl lg:h-24 lg:w-24" /> : <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border-4 border-white bg-lime text-3xl font-black text-ink shadow-xl lg:h-24 lg:w-24">{restaurant.name.charAt(0)}</span>}
-        <div className="min-w-0 pb-1">
-          <span className={`inline-block rounded-full px-3 py-1 text-xs font-black ${restaurant.open ? 'bg-success text-white' : 'bg-danger text-white'}`}>{restaurant.open ? 'ABERTO AGORA' : 'FECHADO'}</span>
-          <h1 className="mt-2 break-words text-2xl font-black leading-tight sm:text-4xl lg:text-5xl">{restaurant.tradeName || restaurant.name}</h1>
-          <p className="mt-2 text-sm font-semibold text-stone-200 sm:text-base">{[typeLabels[restaurant.establishmentType ?? 'RESTAURANT'], location].filter(Boolean).join(' • ')}</p>
-          <p className="mt-1 hidden max-w-2xl text-stone-200 sm:line-clamp-2 sm:block">{restaurant.description ?? 'Entrega e retirada no estabelecimento.'}</p>
-        </div>
+  return <header className="mx-auto w-full max-w-7xl lg:mt-4">
+    <div className="flex min-h-16 items-center justify-end px-4 py-2 sm:px-6 lg:px-0">
+      <UserMenu returnTo={`/${slug}`} />
+    </div>
+    <div className="relative">
+      <div className="h-[190px] overflow-hidden bg-stone-200 sm:h-[240px] sm:rounded-t-3xl lg:h-[300px] lg:rounded-3xl">
+        {restaurant.bannerUrl
+          ? <img src={restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-cover" />
+          : <div className="h-full w-full bg-stone-200" role="img" aria-label={`${restaurant.name} não possui banner cadastrado`} />}
+      </div>
+      <div className="absolute -bottom-9 left-4 sm:-bottom-11 sm:left-8 lg:-bottom-12">
+        {restaurant.logoUrl
+          ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-[76px] w-[76px] rounded-2xl border border-border bg-white p-1.5 object-contain shadow-soft sm:h-[92px] sm:w-[92px] lg:h-[104px] lg:w-[104px] lg:rounded-3xl" />
+          : <span className="grid h-[76px] w-[76px] place-items-center rounded-2xl border border-border bg-white text-2xl font-black text-ink shadow-soft sm:h-[92px] sm:w-[92px] sm:text-3xl lg:h-[104px] lg:w-[104px] lg:rounded-3xl">{restaurant.name.charAt(0)}</span>}
       </div>
     </div>
+    <div className="px-4 pb-1 pt-12 sm:px-8 sm:pt-14 lg:pt-16">
+      <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <h1 className="min-w-0 break-words text-2xl font-black leading-tight sm:text-3xl lg:text-4xl">{restaurant.tradeName || restaurant.name}</h1>
+        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${restaurant.open ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>{restaurant.open ? 'ABERTO AGORA' : 'FECHADO'}</span>
+      </div>
+      <p className="mt-2 break-words text-sm font-semibold text-stone-500 sm:text-base">{[typeLabels[restaurant.establishmentType ?? 'RESTAURANT'], location].filter(Boolean).join(' • ')}</p>
+      <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-stone-600 sm:text-base">{restaurant.description ?? 'Entrega e retirada no estabelecimento.'}</p>
     </div>
-    <div className="absolute right-4 top-4 z-50 sm:right-6 sm:top-6"><UserMenu returnTo={`/${slug}`} /></div>
   </header>;
 }
 
