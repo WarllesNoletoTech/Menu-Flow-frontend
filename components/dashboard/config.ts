@@ -2,7 +2,7 @@ import type { Role } from '../../lib/auth';
 export type DashboardItem = { label: string; href: string; icon: string; external?: boolean };
 export const dashboardMenus: Record<Role, DashboardItem[]> = {
   SUPER_ADMIN: [
-    { icon: '▣', label: 'Visão geral', href: '/admin' }, { icon: '▦', label: 'Estabelecimentos', href: '/admin/restaurantes' }, { icon: '♙', label: 'Usuários', href: '/admin/usuarios' }, { icon: '♙', label: 'Minha conta', href: '/admin/conta' }, { icon: '↗', label: 'Portal público', href: '/', external: true },
+    { icon: '▣', label: 'Visão geral', href: '/admin' }, { icon: '▦', label: 'Estabelecimentos', href: '/admin/restaurantes' }, { icon: '♙', label: 'Usuários', href: '/admin/usuarios' }, { icon: 'R$', label: 'Cobranças', href: '/admin/cobrancas' }, { icon: '♙', label: 'Minha conta', href: '/admin/conta' }, { icon: '↗', label: 'Portal público', href: '/', external: true },
   ],
   RESTAURANT_ADMIN: [],
   EMPLOYEE: [
