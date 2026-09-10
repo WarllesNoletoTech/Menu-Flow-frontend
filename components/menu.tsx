@@ -9,6 +9,8 @@ import { useAuth } from './AuthProvider';
 import { UserMenu } from './auth/UserMenu';
 import { canOfferDelivery } from '../lib/fulfillment';
 import { legacyEstablishmentLabel } from '../lib/public-restaurants';
+import Link from 'next/link';
+import { BrandLogo } from './BrandLogo';
 
 type Category = { _id: string; name: string };
 type Addon = { _id: string; name: string; price: number; priceCents?: number };
@@ -204,7 +206,10 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
   const availability = restaurant.canAcceptOrdersNow ? 'ABERTO AGORA' : restaurant.openingStatus.status === 'UNCONFIGURED' ? 'HORÁRIO NÃO INFORMADO' : restaurant.openingStatus.status === 'OPEN' && !restaurant.acceptingOrders ? 'PEDIDOS PAUSADOS' : 'FECHADO';
   return <header className="mx-auto w-full max-w-7xl lg:mt-4">
-    <div className="flex min-h-16 items-center justify-end px-4 py-2 sm:px-6 lg:px-0">
+    <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
+      <Link href="/" aria-label="Voltar para a página inicial do Menu Flow" className="shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
+        <BrandLogo variant="wordmark" priority className="h-9 w-auto bg-transparent sm:h-12 [&_img]:h-full [&_img]:w-auto" />
+      </Link>
       <UserMenu returnTo={`/${slug}`} />
     </div>
     <div className="relative lg:px-8">
