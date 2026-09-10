@@ -1,34 +1,258 @@
-'use client';
-
-import { useCallback, useEffect, useState } from 'react';
-import { useEmpresa } from '../../../components/empresa/EmpresaContext';
-import { useOrderSocket } from '../../../lib/order-socket';
-import { getSession } from '../../../lib/auth';
-import { apiUrl } from '../../../lib/api';
-
-type Report={_id:string;reportNumber:string;periodStart:string;periodEnd:string;orderCount:number;serviceFeeTotalCents:number;includeMonthlyFee:boolean;monthlyFeeCents:number;totalCents:number;status:string;generatedAt:string;paidAt?:string};
-type Billing = { salesMetrics: { completedOrders: number; grossRevenueCents: number; averageTicketCents: number; cancelledOrders: number }; estimate: { completedOrderCount: number; plan: { name: string } | null; tier: { minOrders: number; maxOrders: number | null } | null; amountCents: number | null }; invoices: Array<{ _id: string; period: string; completedOrderCount: number; amountCents: number; status: string; dueDate?: string }> };
-const money = (value: number | null) => value === null ? 'Plano não definido' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value / 100);
-const labels: Record<string, string> = { DRAFT: 'Rascunho', GENERATED: 'Gerado', OPEN: 'Em aberto', PAID: 'Pago', OVERDUE: 'Vencido', WAIVED: 'Isento', CANCELLED: 'Cancelado' };
-
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import { useEmpresa } from "../../../components/empresa/EmpresaContext";
+import { useOrderSocket } from "../../../lib/order-socket";
+import { getSession } from "../../../lib/auth";
+import { apiUrl } from "../../../lib/api";
+type Report = {
+  _id: string;
+  reportNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  orderCount: number;
+  serviceFeeTotalCents: number;
+  includeMonthlyFee: boolean;
+  monthlyFeeCents: number;
+  totalCents: number;
+  status: string;
+  generatedAt: string;
+  paidAt?: string;
+  paymentSnapshot?: { pixReceiverName?: string; pixKey?: string };
+};
+type Sales = {
+  completedOrders: number;
+  grossRevenueCents: number;
+  averageTicketCents: number;
+  cancelledOrders: number;
+};
+const money = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    v / 100,
+  );
+const labels: Record<string, string> = {
+  DRAFT: "Rascunho",
+  GENERATED: "Gerado",
+  PAID: "Pago",
+  CANCELLED: "Cancelado",
+};
+const feeHelp =
+  "Taxa de R$ 1,00 aplicada a cada pedido concluído. Esse valor é destinado à manutenção, segurança, desempenho, suporte e evolução contínua da plataforma Menu Flow.";
 export default function Page() {
   const { request } = useEmpresa();
-  const [data, setData] = useState<Billing>();
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true); const [reports,setReports]=useState<Report[]>([]);
+  const [sales, setSales] = useState<Sales>(),
+    [reports, setReports] = useState<Report[]>([]),
+    [salesError, setSalesError] = useState(""),
+    [reportsError, setReportsError] = useState(""),
+    [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
-    setLoading(true); setError('');
-    const period = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).format(new Date()).replace('/', '-');
-    try { const [billing,serviceReports]=await Promise.all([request<Billing>(`/billing/me?period=${period}`, { cache: 'no-store' }),request<Report[]>('/billing/me/reports',{cache:'no-store'})]);setData(billing);setReports(serviceReports); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o faturamento.'); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setSalesError("");
+    setReportsError("");
+    const now = new Date(),
+      period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const results = await Promise.allSettled([
+      request<{ salesMetrics: Sales }>(`/billing/me?period=${period}`, {
+        cache: "no-store",
+      }),
+      request<Report[]>("/billing/me/reports", { cache: "no-store" }),
+    ]);
+    if (results[0].status === "fulfilled")
+      setSales(results[0].value.salesMetrics);
+    else
+      setSalesError(
+        results[0].reason instanceof Error
+          ? results[0].reason.message
+          : "Não foi possível carregar o resumo de vendas.",
+      );
+    if (results[1].status === "fulfilled") setReports(results[1].value);
+    else
+      setReportsError(
+        results[1].reason instanceof Error
+          ? results[1].reason.message
+          : "Não foi possível carregar as cobranças.",
+      );
+    setLoading(false);
   }, [request]);
-  useEffect(() => { void load(); const focus=()=>void load(); window.addEventListener('focus',focus); return()=>window.removeEventListener('focus',focus); }, [load]);
-  useOrderSocket(useCallback((event, value) => { if (event === 'updated' && (value as { status?: string })?.status === 'COMPLETED') void load(); }, [load]));
-  async function download(report:Report){try{const session=getSession();const response=await fetch(apiUrl(`/billing/me/reports/${report._id}/pdf`),{headers:{Authorization:`Bearer ${session?.accessToken}`},cache:'no-store'});if(!response.ok)throw new Error('Não foi possível baixar o PDF.');const url=URL.createObjectURL(await response.blob()),anchor=document.createElement('a');anchor.href=url;anchor.download=`${report.reportNumber}.pdf`;document.body.appendChild(anchor);anchor.click();anchor.remove();URL.revokeObjectURL(url);}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível baixar o PDF.')}}
-  const badge=(status:string)=>status==='PAID'?'bg-green-100 text-green-800':status==='GENERATED'?'bg-amber-100 text-amber-900':status==='CANCELLED'?'bg-red-100 text-red-800':'bg-stone-200 text-stone-700';
-
-  return <section className="mx-auto max-w-5xl"><h1 className="text-3xl font-black">Faturamento</h1><p className="mt-2 text-stone-500">Vendas da loja e cobrança do Menu Flow são informações independentes.</p>{loading&&<p className="mt-5">Carregando dados atuais…</p>}{error&&<p role="alert" className="mt-4 bg-danger/10 p-4 text-danger">{error}</p>}{data&&<><h2 className="mt-8 text-xl font-black">Resumo de vendas</h2><div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Card label="Pedidos concluídos" value={data.salesMetrics.completedOrders}/><Card label="Faturamento bruto" value={money(data.salesMetrics.grossRevenueCents)}/><Card label="Ticket médio" value={money(data.salesMetrics.averageTicketCents)}/><Card label="Pedidos cancelados" value={data.salesMetrics.cancelledOrders}/></div><section className="mt-8 rounded-2xl border bg-surface p-6"><h2 className="text-xl font-black">Seu plano Menu Flow</h2>{data.estimate.plan?<div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Card label="Plano atual" value={data.estimate.plan.name}/><Card label="Pedidos contabilizados" value={data.estimate.completedOrderCount}/><Card label="Faixa atual" value={data.estimate.tier?`${data.estimate.tier.minOrders}–${data.estimate.tier.maxOrders??'∞'}`:'—'}/><Card label="Mensalidade estimada" value={money(data.estimate.amountCents)}/></div>:<p className="mt-3 font-bold text-stone-500">Plano ainda não definido. Suas vendas continuam contabilizadas normalmente.</p>}</section><h2 className="mt-8 text-xl font-black">Cobranças Menu Flow</h2><p className="mt-1 text-stone-500">Relatórios de serviço emitidos pela plataforma. Seus valores de venda não são abatidos aqui.</p><div className="mt-3 grid gap-4">{reports.map(report=><article className="rounded-2xl bg-surface p-5 shadow-sm" key={report._id}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm text-stone-500">Relatório</p><h3 className="font-black">{report.reportNumber}</h3></div><span className={`rounded-full px-3 py-1 text-sm font-bold ${badge(report.status)}`}>{labels[report.status]??report.status}</span></div><dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-sm text-stone-500">Período</dt><dd>{new Date(report.periodStart).toLocaleDateString('pt-BR')} a {new Date(report.periodEnd).toLocaleDateString('pt-BR')}</dd></div><div><dt className="text-sm text-stone-500">Pedidos</dt><dd>{report.orderCount}</dd></div><div><dt className="text-sm text-stone-500">Taxa de serviço</dt><dd>{money(report.serviceFeeTotalCents)}</dd></div><div><dt className="text-sm text-stone-500">Mensalidade</dt><dd>{report.includeMonthlyFee?money(report.monthlyFeeCents):'Não incluída'}</dd></div><div><dt className="text-sm text-stone-500">Total</dt><dd className="font-black">{money(report.totalCents)}</dd></div><div><dt className="text-sm text-stone-500">Data de emissão</dt><dd>{new Date(report.generatedAt).toLocaleDateString('pt-BR')}</dd></div>{report.paidAt&&<div><dt className="text-sm text-stone-500">Pago em</dt><dd>{new Date(report.paidAt).toLocaleString('pt-BR')}</dd></div>}</dl><button className="mt-5 rounded-xl border px-4 py-2 font-bold" onClick={()=>void download(report)}>Baixar PDF</button></article>)}{!loading&&!error&&!reports.length&&<p className="rounded-2xl bg-surface p-4 text-stone-500">Nenhum relatório emitido.</p>}</div><details className="mt-6"><summary className="cursor-pointer font-bold">Cobranças mensais legadas</summary><div className="mt-3 overflow-hidden rounded-2xl bg-surface">{data.invoices.map(invoice=><div className="grid gap-2 border-b p-4 sm:grid-cols-5" key={invoice._id}><span>{invoice.period.split('-').reverse().join('/')}</span><span>{invoice.completedOrderCount} pedidos</span><strong>{money(invoice.amountCents)}</strong><span>{invoice.dueDate?new Date(invoice.dueDate).toLocaleDateString('pt-BR'):'Sem vencimento'}</span><span>{labels[invoice.status]??invoice.status}</span></div>)}{!data.invoices.length&&<p className="p-4 text-stone-500">Nenhuma cobrança legada.</p>}</div></details></>}</section>;
+  useEffect(() => {
+    void load();
+    const focus = () => void load();
+    window.addEventListener("focus", focus);
+    return () => window.removeEventListener("focus", focus);
+  }, [load]);
+  useOrderSocket(
+    useCallback(
+      (event, value) => {
+        if (
+          event === "updated" &&
+          (value as { status?: string })?.status === "COMPLETED"
+        )
+          void load();
+      },
+      [load],
+    ),
+  );
+  async function download(report: Report) {
+    try {
+      setReportsError("");
+      const response = await fetch(
+        apiUrl(`/billing/me/reports/${report._id}/pdf`),
+        {
+          headers: { Authorization: `Bearer ${getSession()?.accessToken}` },
+          cache: "no-store",
+        },
+      );
+      if (!response.ok) throw new Error("Não foi possível baixar o PDF.");
+      const url = URL.createObjectURL(await response.blob()),
+        a = document.createElement("a");
+      a.href = url;
+      a.download = `${report.reportNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setReportsError(
+        e instanceof Error ? e.message : "Não foi possível baixar o PDF.",
+      );
+    }
+  }
+  const badge = (s: string) =>
+    s === "PAID"
+      ? "bg-green-100 text-green-800"
+      : s === "GENERATED"
+        ? "bg-amber-100 text-amber-900"
+        : s === "CANCELLED"
+          ? "bg-red-100 text-red-800"
+          : "bg-stone-200 text-stone-700";
+  return (
+    <section className="mx-auto max-w-5xl">
+      <h1 className="text-3xl font-black">Faturamento</h1>
+      <p className="mt-2 text-stone-500">
+        Vendas da loja e cobranças do Menu Flow são informações independentes.
+      </p>
+      {loading && <p className="mt-5">Carregando dados atuais…</p>}
+      <h2 className="mt-8 text-xl font-black">Resumo de vendas</h2>
+      {salesError && (
+        <p role="alert" className="mt-3 bg-danger/10 p-4 text-danger">
+          {salesError}
+        </p>
+      )}
+      {sales && (
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card label="Pedidos concluídos" value={sales.completedOrders} />
+          <Card
+            label="Faturamento bruto"
+            value={money(sales.grossRevenueCents)}
+          />
+          <Card label="Ticket médio" value={money(sales.averageTicketCents)} />
+          <Card label="Pedidos cancelados" value={sales.cancelledOrders} />
+        </div>
+      )}
+      <h2 className="mt-8 text-xl font-black">Cobranças Menu Flow</h2>
+      <p className="mt-1 text-stone-500">
+        Relatórios de serviço emitidos pela plataforma.
+      </p>
+      {reportsError && (
+        <p role="alert" className="mt-3 bg-danger/10 p-4 text-danger">
+          {reportsError}
+        </p>
+      )}
+      <div className="mt-3 grid gap-4">
+        {reports.map((r) => (
+          <article className="rounded-2xl bg-surface p-5 shadow-sm" key={r._id}>
+            <div className="flex justify-between gap-3">
+              <div>
+                <p className="text-sm text-stone-500">Relatório</p>
+                <h3 className="font-black">{r.reportNumber}</h3>
+              </div>
+              <span
+                className={`h-fit rounded-full px-3 py-1 text-sm font-bold ${badge(r.status)}`}
+              >
+                {labels[r.status] ?? r.status}
+              </span>
+            </div>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Item
+                label="Período"
+                value={`${date(r.periodStart)} a ${date(r.periodEnd)}`}
+              />
+              <Item label="Data de emissão" value={date(r.generatedAt)} />
+              <Item label="Pedidos cobrados" value={r.orderCount} />
+              <Item
+                label={
+                  <span className="flex gap-2">
+                    Taxa de desenvolvimento <Help />
+                  </span>
+                }
+                value={money(r.serviceFeeTotalCents)}
+              />
+              <Item label="Mensalidade" value={money(r.monthlyFeeCents)} />
+              <Item label="Total" value={money(r.totalCents)} strong />
+              {r.paymentSnapshot?.pixReceiverName && (
+                <Item
+                  label="PIX / Favorecido"
+                  value={`${r.paymentSnapshot.pixReceiverName} — ${r.paymentSnapshot.pixKey}`}
+                />
+              )}
+            </dl>
+            <button
+              className="mt-5 rounded-xl border px-4 py-2 font-bold"
+              onClick={() => void download(r)}
+            >
+              BAIXAR PDF
+            </button>
+          </article>
+        ))}
+        {!loading && !reportsError && !reports.length && (
+          <p className="rounded-2xl bg-surface p-4 text-stone-500">
+            Nenhum relatório emitido.
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }
-
-function Card({ label, value }: { label: string; value: React.ReactNode }) { return <article className="rounded-2xl bg-surface p-5"><p className="text-sm font-bold text-stone-500">{label}</p><strong className="mt-3 block text-2xl">{value}</strong></article>; }
+function Help() {
+  return (
+    <details className="relative inline-block">
+      <summary
+        aria-label="Sobre a taxa de desenvolvimento"
+        className="cursor-pointer list-none rounded-full border px-1 text-xs"
+      >
+        ?
+      </summary>
+      <span className="absolute right-0 z-10 mt-2 block w-72 rounded-xl bg-ink p-3 text-xs font-normal text-white shadow-soft">
+        {feeHelp}
+      </span>
+    </details>
+  );
+}
+function Item({
+  label,
+  value,
+  strong,
+}: {
+  label: React.ReactNode;
+  value: React.ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-sm text-stone-500">{label}</dt>
+      <dd className={strong ? "font-black" : ""}>{value}</dd>
+    </div>
+  );
+}
+function Card({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <article className="rounded-2xl bg-surface p-5">
+      <p className="text-sm font-bold text-stone-500">{label}</p>
+      <strong className="mt-3 block text-2xl">{value}</strong>
+    </article>
+  );
+}
+function date(v: string) {
+  return new Date(v).toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+  });
+}
