@@ -12,7 +12,7 @@ type Category = { _id: string; name: string };
 type Addon = { _id: string; name: string; price: number; priceCents?: number };
 type AddonGroup = { _id: string; name: string; required: boolean; min: number; max: number; addons: Addon[] };
 type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string; addonGroups?: AddonGroup[] };
-type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;deliveryAvailable:boolean;deliveryUnavailableReason?:string;minimumOrderCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};acceptingOrders:boolean;canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;coverageType?:'ALL'|'SPECIFIC';fee:number;feeCents?:number;active?:boolean}>;paymentMethods:Array<{_id:string;name:string;method:string;active?:boolean}> };
+type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;orderWhatsapp?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;deliveryAvailable:boolean;deliveryUnavailableReason?:string;minimumOrderCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};acceptingOrders:boolean;canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;coverageType?:'ALL'|'SPECIFIC';fee:number;feeCents?:number;active?:boolean}>;paymentMethods:Array<{_id:string;name:string;method:string;active?:boolean}> };
 type CartItem = Product & { quantity: number; addonNames: string[] };
 type StoredCartItem = { productId: string; quantity: number; addonNames: string[] };
 
@@ -130,6 +130,8 @@ export function Menu({ slug }: { slug: string }) {
     event.preventDefault();
     if (!restaurant || submitting) return;
     setSubmitting(true);
+    // Reserve a user-initiated tab before the asynchronous POST; navigate it only after the order is saved.
+    const whatsappWindow = restaurant.orderWhatsapp ? window.open('about:blank', '_blank') : null;
     const form = new FormData(event.currentTarget);
     const payload = {
       customerName: form.get('name'), phone: form.get('phone'), fulfillment,
@@ -146,10 +148,12 @@ export function Menu({ slug }: { slug: string }) {
       if (!response.ok) {
         const data = await response.json().catch(() => null) as { message?: string | string[] } | null;
         setMessage(Array.isArray(data?.message) ? data.message[0] : data?.message ?? 'Não foi possível enviar o pedido');
-        return;
+        whatsappWindow?.close(); return;
       }
-      const order = await response.json() as { orderNumber: string; publicToken: string }; setCart([]); setCheckout(false); window.location.assign(`/acompanhar/${order.orderNumber}?token=${encodeURIComponent(order.publicToken)}`);
-    } catch { setMessage('Não foi possível conectar ao servidor. Tente novamente.'); } finally { setSubmitting(false); }
+      const order = await response.json() as { orderNumber: string; publicToken: string; trackingUrl: string; whatsappUrl?: string }; setCart([]); setCheckout(false);
+      if (order.whatsappUrl) { sessionStorage.setItem(`menu-flow-whatsapp:${order.orderNumber}`, order.whatsappUrl); if (whatsappWindow) whatsappWindow.location.href = order.whatsappUrl; else window.open(order.whatsappUrl, '_blank', 'noopener,noreferrer'); } else whatsappWindow?.close();
+      window.location.assign(`${order.trackingUrl}&confirmed=1`);
+    } catch { whatsappWindow?.close(); setMessage('Não foi possível conectar ao servidor. Tente novamente.'); } finally { setSubmitting(false); }
   }
 
   if (message && !restaurant) return <StatePage error message={message} />;
