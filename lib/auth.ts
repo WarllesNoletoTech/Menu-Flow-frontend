@@ -1,6 +1,6 @@
 'use client';
 export type Role = 'SUPER_ADMIN' | 'RESTAURANT_ADMIN' | 'EMPLOYEE' | 'CUSTOMER';
-export type User = { id: string; name: string; email?: string; phone?: string; role: Role; restaurantId?: string };
+export type User = { id: string; name: string; email?: string; phone?: string; reportWhatsapp?: string; role: Role; restaurantId?: string };
 export type AuthSession = { accessToken: string; user: User };
 const SESSION_KEY = 'menu-flow.auth-session';
 export const dashboardForRole: Record<Role, string> = { SUPER_ADMIN: '/admin', RESTAURANT_ADMIN: '/empresa', EMPLOYEE: '/funcionario', CUSTOMER: '/cliente' };
