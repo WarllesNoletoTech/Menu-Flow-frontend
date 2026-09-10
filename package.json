@@ -6,7 +6,7 @@
     "build": "next build",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf .test-dist && tsc lib/request-sequencer.ts --module commonjs --target es2020 --outDir .test-dist --skipLibCheck && node --test test/*.test.js"
+    "test": "rm -rf .test-dist && tsc lib/request-sequencer.ts lib/payment-methods.ts --module commonjs --target es2020 --outDir .test-dist --skipLibCheck && node --test test/*.test.js"
   },
   "dependencies": {
     "next": "^15.1.0",
