@@ -22,6 +22,8 @@ type Report = {
 type Sales = {
   completedOrders: number;
   grossRevenueCents: number;
+  menuFlowServiceFeesCollectedCents: number;
+  grossOrderVolumeCents: number;
   averageTicketCents: number;
   cancelledOrders: number;
 };
@@ -36,7 +38,7 @@ const labels: Record<string, string> = {
   CANCELLED: "Cancelado",
 };
 const feeHelp =
-  "Taxa de R$ 1,00 aplicada a cada pedido concluído. Esse valor é destinado à manutenção, segurança, desempenho, suporte e evolução contínua da plataforma Menu Flow.";
+  "Este valor corresponde às taxas de serviço Menu Flow cobradas dos clientes nos pedidos concluídos deste relatório.";
 export default function Page() {
   const { request } = useEmpresa();
   const [sales, setSales] = useState<Sales>(),
@@ -141,9 +143,11 @@ export default function Page() {
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card label="Pedidos concluídos" value={sales.completedOrders} />
           <Card
-            label="Faturamento bruto"
+            label="Faturamento de vendas"
             value={money(sales.grossRevenueCents)}
           />
+          <Card label="Taxas Menu Flow a repassar" value={money(sales.menuFlowServiceFeesCollectedCents)} />
+          <Card label="Total transacionado" value={money(sales.grossOrderVolumeCents)} />
           <Card label="Ticket médio" value={money(sales.averageTicketCents)} />
           <Card label="Pedidos cancelados" value={sales.cancelledOrders} />
         </div>
