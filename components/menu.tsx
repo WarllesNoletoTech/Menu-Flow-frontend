@@ -7,10 +7,10 @@ import { useAuth } from './AuthProvider';
 import { UserMenu } from './auth/UserMenu';
 
 type Category = { _id: string; name: string };
-type Addon = { name: string; price: number };
-type AddonGroup = { name: string; required: boolean; min: number; max: number; addons: Addon[] };
+type Addon = { _id: string; name: string; price: number; priceCents?: number };
+type AddonGroup = { _id: string; name: string; required: boolean; min: number; max: number; addons: Addon[] };
 type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string; addonGroups?: AddonGroup[] };
-type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;city?:string;state?:string;timezone:string;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;fee:number}>;paymentMethods:Array<{_id:string;name:string;method:string}> };
+type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;minimumOrderCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;fee:number}>;paymentMethods:Array<{_id:string;name:string;method:string}> };
 type CartItem = Product & { quantity: number; addonNames: string[] };
 type StoredCartItem = { productId: string; quantity: number; addonNames: string[] };
 
@@ -29,6 +29,7 @@ export function Menu({ slug }: { slug: string }) {
   const [hydratedCartKey, setHydratedCartKey] = useState('');
   const [message, setMessage] = useState<string>();
   const [fulfillment, setFulfillment] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [submitting, setSubmitting] = useState(false);
   const cartKey = `menu-flow-cart:${slug}`;
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function Menu({ slug }: { slug: string }) {
         if (!response.ok) throw new Error('Estabelecimento não encontrado');
         const data = await response.json() as Restaurant;
         setRestaurant(data);
+        setFulfillment(data.pickupEnabled ? 'PICKUP' : 'DELIVERY');
         const menuResponse = await fetch(apiUrl(`/restaurants/${data._id}/menu`));
         if (!menuResponse.ok) throw new Error('Não foi possível carregar o cardápio');
         const result = await menuResponse.json() as { categories: Category[]; products: Product[] };
@@ -124,24 +126,27 @@ export function Menu({ slug }: { slug: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!restaurant) return;
+    if (!restaurant || submitting) return;
+    setSubmitting(true);
     const form = new FormData(event.currentTarget);
     const payload = {
       customerName: form.get('name'), phone: form.get('phone'), fulfillment,
       paymentMethod: form.get('paymentMethod'),
-      address: fulfillment === 'DELIVERY' ? { neighborhood: form.get('neighborhood'), street: form.get('street'), number: form.get('number') } : undefined,
-      items: cart.map(({ _id, quantity, addonNames }) => ({ productId: _id, quantity, addonNames })),
+      address: fulfillment === 'DELIVERY' ? { zipCode: form.get('zipCode'), street: form.get('street'), number: form.get('number'), complement: form.get('complement'), neighborhood: form.get('neighborhood'), city: form.get('city'), state: form.get('state'), reference: form.get('reference') } : undefined,
+      needsChange: form.get('needsChange') === 'yes',
+      changeForCents: form.get('needsChange') === 'yes' ? Math.round(Number(String(form.get('changeFor')).replace(',', '.')) * 100) : undefined,
+      items: cart.map(({ _id, quantity, addonNames, addonGroups }) => ({ productId: _id, quantity, addons: addonNames.map(name => { const group = (addonGroups ?? []).find(g => g.addons.some(a => a.name === name))!; const addon = group.addons.find(a => a.name === name)!; return { groupId: group._id, addonId: addon._id }; }) })),
     };
     const session = getSession();
     try {
-      const response = await fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.user.role === 'CUSTOMER' ? { Authorization: `Bearer ${session.accessToken}` } : {}) }, body: JSON.stringify(payload) });
+      const response = await fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(), ...(session?.user.role === 'CUSTOMER' ? { Authorization: `Bearer ${session.accessToken}` } : {}) }, body: JSON.stringify(payload) });
       if (!response.ok) {
         const data = await response.json().catch(() => null) as { message?: string | string[] } | null;
         setMessage(Array.isArray(data?.message) ? data.message[0] : data?.message ?? 'Não foi possível enviar o pedido');
         return;
       }
-      setCart([]); setCheckout(false); setMessage('Pedido enviado! O estabelecimento irá confirmar em breve.');
-    } catch { setMessage('Não foi possível conectar ao servidor. Tente novamente.'); }
+      const order = await response.json() as { orderNumber: string; publicToken: string }; setCart([]); setCheckout(false); window.location.assign(`/acompanhar/${order.orderNumber}?token=${encodeURIComponent(order.publicToken)}`);
+    } catch { setMessage('Não foi possível conectar ao servidor. Tente novamente.'); } finally { setSubmitting(false); }
   }
 
   if (message && !restaurant) return <StatePage error message={message} />;
@@ -170,7 +175,7 @@ export function Menu({ slug }: { slug: string }) {
       </div>
       {selectedProduct && <ProductModal product={selectedProduct} selected={selectedAddons} toggle={toggleAddon} close={() => setSelectedProduct(undefined)} canAdd={canAddSelectedProduct} total={(selectedProduct.promotionalPrice ?? selectedProduct.price) + addonPrice(selectedProduct, selectedAddons)} confirm={() => { add(selectedProduct, selectedAddons); setSelectedProduct(undefined); }} />}
       {cart.length > 0 && <MobileCartBar count={itemCount} subtotal={subtotal} open={() => setCheckout(true)} />}
-      {checkout && <CheckoutModal restaurant={restaurant} cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} close={() => setCheckout(false)} submit={submit} fulfillment={fulfillment} setFulfillment={setFulfillment} customer={user?.role === 'CUSTOMER' ? user : undefined} />}
+      {checkout && <CheckoutModal restaurant={restaurant} cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} close={() => setCheckout(false)} submit={submit} fulfillment={fulfillment} setFulfillment={setFulfillment} customer={user?.role === 'CUSTOMER' ? user : undefined} submitting={submitting} />}
     </main>
   );
 }
@@ -244,10 +249,15 @@ function ProductModal({ product, selected, toggle, close, canAdd, total, confirm
   return <ModalFrame label={`Personalizar ${product.name}`} close={close} sheet><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="break-words text-xl font-black sm:text-2xl">{product.name}</h2><p className="mt-1 text-sm text-stone-500">{product.description}</p></div><button type="button" aria-label="Fechar produto" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div>{(product.addonGroups ?? []).map((group) => <fieldset key={group.name} className="mt-5 border-t pt-4"><legend className="font-bold">{group.name} {group.required && <span className="text-danger">* obrigatório</span>}</legend><p className="mt-1 text-xs text-stone-500">Escolha de {group.min ?? (group.required ? 1 : 0)} a {group.max} opções</p>{group.addons.map((addon) => <label key={addon.name} className="mt-3 flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3"><span className="break-words"><input className="mr-3 h-5 w-5 align-middle accent-primary" type="checkbox" checked={selected.includes(addon.name)} onChange={() => toggle(group, addon.name)} />{addon.name}</span><b className="shrink-0 whitespace-nowrap">{addon.price > 0 ? `+ ${money(addon.price)}` : 'Grátis'}</b></label>)}</fieldset>)}<button type="button" disabled={!canAdd} onClick={confirm} className="sticky bottom-0 mt-6 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">ADICIONAR · {money(total)}</button></ModalFrame>;
 }
 
-function CheckoutModal({ restaurant, cart, subtotal, addonPrice, setQuantity, close, submit, fulfillment, setFulfillment, customer }: { restaurant: Restaurant; cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; close: () => void; submit: (event: FormEvent<HTMLFormElement>) => void; fulfillment: 'PICKUP' | 'DELIVERY'; setFulfillment: (value: 'PICKUP' | 'DELIVERY') => void; customer?: { name: string; phone?: string } }) {
-  return <ModalFrame label="Finalizar pedido" close={close} sheet><form onSubmit={submit}><div className="flex items-center justify-between gap-4"><h2 className="text-xl font-black sm:text-2xl">Finalizar pedido</h2><button type="button" onClick={close} aria-label="Fechar checkout" className="grid h-11 w-11 place-items-center rounded-xl border">✕</button></div><div className="mt-5 rounded-2xl bg-background p-4">{cart.map((item) => <CartRow key={`${item._id}-${item.addonNames.join()}`} item={item} addonPrice={addonPrice} setQuantity={setQuantity} />)}<p className="mt-4 flex justify-between border-t pt-4 text-lg font-black"><span>Subtotal</span><span className="whitespace-nowrap">{money(subtotal)}</span></p></div><div className="mt-5 grid gap-x-4 sm:grid-cols-2"><label className="font-bold">Nome<input required name="name" defaultValue={customer?.name} className="field" /></label><label className="font-bold">Telefone<input required name="phone" inputMode="tel" defaultValue={customer?.phone} className="field" /></label><label className="font-bold sm:col-span-2">Tipo de entrega<select name="fulfillment" value={fulfillment} onChange={(event) => setFulfillment(event.target.value as 'PICKUP' | 'DELIVERY')} className="field"><option value="PICKUP">Retirar no estabelecimento</option>{restaurant.deliveryZones.length > 0 && <option value="DELIVERY">Entrega</option>}</select></label>{fulfillment === 'DELIVERY' && <><label className="font-bold sm:col-span-2">Bairro<select required name="neighborhood" className="field">{restaurant.deliveryZones.map((zone) => <option key={zone._id} value={zone.name}>{zone.name} · {money(zone.fee)}</option>)}</select></label><label className="font-bold">Rua<input required name="street" className="field" /></label><label className="font-bold">Número<input required name="number" className="field" /></label></>}<label className="font-bold sm:col-span-2">Forma de pagamento<select required name="paymentMethod" className="field">{restaurant.paymentMethods.map((payment) => <option key={payment._id} value={payment.method}>{payment.name}</option>)}</select></label></div><button disabled={!restaurant.canAcceptOrdersNow || restaurant.paymentMethods.length === 0} className="sticky bottom-0 mt-5 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">FINALIZAR · {money(subtotal)}</button></form></ModalFrame>;
+function CheckoutModal({ restaurant, cart, subtotal, addonPrice, setQuantity, close, submit, fulfillment, setFulfillment, customer, submitting }: { restaurant: Restaurant; cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; close: () => void; submit: (event: FormEvent<HTMLFormElement>) => void; fulfillment: 'PICKUP' | 'DELIVERY'; setFulfillment: (value: 'PICKUP' | 'DELIVERY') => void; customer?: { name: string; phone?: string }; submitting: boolean }) {
+  const [payment, setPayment] = useState(restaurant.paymentMethods[0]?.method ?? '');
+  const [zoneName, setZoneName] = useState(restaurant.deliveryZones[0]?.name ?? '');
+  const deliveryFee = fulfillment === 'DELIVERY' ? restaurant.deliveryZones.find(zone => zone.name === zoneName)?.fee ?? 0 : 0;
+  return <ModalFrame label="Finalizar pedido" close={close} sheet><form onSubmit={submit}><div className="flex items-center justify-between gap-4"><h2 className="text-xl font-black sm:text-2xl">Finalizar pedido</h2><button type="button" onClick={close} aria-label="Fechar checkout" className="grid h-11 w-11 place-items-center rounded-xl border">✕</button></div><div className="mt-5 rounded-2xl bg-background p-4">{cart.map((item) => <CartRow key={`${item._id}-${item.addonNames.join()}`} item={item} addonPrice={addonPrice} setQuantity={setQuantity} />)}<p className="mt-4 flex justify-between border-t pt-4 text-lg font-black"><span>Subtotal</span><span className="whitespace-nowrap">{money(subtotal)}</span></p></div><div className="mt-5 grid gap-x-4 sm:grid-cols-2"><label className="font-bold">Nome<input required name="name" defaultValue={customer?.name} className="field" /></label><label className="font-bold">Telefone<input required name="phone" inputMode="tel" defaultValue={customer?.phone} className="field" /></label><label className="font-bold sm:col-span-2">Tipo de entrega<select name="fulfillment" value={fulfillment} onChange={(event) => setFulfillment(event.target.value as 'PICKUP' | 'DELIVERY')} className="field">{restaurant.pickupEnabled && <option value="PICKUP">Retirar no estabelecimento</option>}{restaurant.deliveryEnabled && restaurant.deliveryZones.length > 0 && <option value="DELIVERY">Entrega</option>}</select></label>{fulfillment === 'DELIVERY' && <><label className="font-bold">CEP<input required name="zipCode" className="field" /></label><label className="font-bold">Cidade<input required name="city" defaultValue={restaurant.city} className="field" /></label><label className="font-bold">UF<input required name="state" maxLength={2} defaultValue={restaurant.state} className="field" /></label><label className="font-bold sm:col-span-2">Bairro<select required name="neighborhood" className="field" value={zoneName} onChange={event => setZoneName(event.target.value)}>{restaurant.deliveryZones.map((zone) => <option key={zone._id} value={zone.name}>{zone.name} · {money(zone.fee)}</option>)}</select></label><label className="font-bold">Rua<input required name="street" className="field" /></label><label className="font-bold">Número<input required name="number" className="field" /></label><label className="font-bold">Complemento<input name="complement" className="field" /></label><label className="font-bold">Referência<input name="reference" className="field" /></label></>}<label className="font-bold sm:col-span-2">Forma de pagamento<select required name="paymentMethod" className="field" value={payment} onChange={event => setPayment(event.target.value)}>{restaurant.paymentMethods.map((payment) => <option key={payment._id} value={payment.method}>{payment.name}</option>)}</select></label>{payment === 'CASH' && <CashChange />}</div><div className="mt-4 rounded-xl bg-background p-4 text-sm"><p className="flex justify-between"><span>Subtotal</span><b>{money(subtotal)}</b></p><p className="mt-1 flex justify-between"><span>Taxa de entrega</span><b>{money(deliveryFee)}</b></p><p className="mt-2 flex justify-between border-t pt-2 text-lg font-black"><span>Total</span><span>{money(subtotal + deliveryFee)}</span></p></div>{fulfillment === 'PICKUP' && <div className="mt-4 rounded-xl bg-background p-4"><b>Retirada em: {restaurant.address || [restaurant.city, restaurant.state].filter(Boolean).join(' - ')}</b>{restaurant.pickupInstructions && <p className="mt-1 text-sm">{restaurant.pickupInstructions}</p>}{restaurant.mapUrl && <a href={restaurant.mapUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-bold text-accent underline">Ver localização</a>}</div>}<button disabled={submitting || !restaurant.canAcceptOrdersNow || restaurant.paymentMethods.length === 0} className="sticky bottom-0 mt-5 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">{submitting ? 'ENVIANDO…' : `CONFIRMAR PEDIDO · ${money(subtotal + deliveryFee)}`}</button></form></ModalFrame>;
 }
 
 function StatePage({ message, error = false }: { message: string; error?: boolean }) {
   return <main className="mx-auto min-h-[60dvh] w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8"><div className={`rounded-3xl p-8 text-center ${error ? 'border border-danger/30 bg-danger/10 text-danger' : 'bg-surface'}`}>{!error && <div className="mx-auto h-48 max-w-2xl animate-pulse rounded-2xl bg-stone-200" />}<h1 className="mt-5 text-xl font-black sm:text-2xl">{message}</h1>{error && <a href="/" className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-ink px-5 font-bold text-white">Voltar para o início</a>}</div></main>;
 }
+
+function CashChange(){const [cash,setCash]=useState(false);return <fieldset className="sm:col-span-2 rounded-xl border p-4"><legend className="font-bold">Pagamento em dinheiro: precisa de troco?</legend><label className="mr-5"><input required type="radio" name="needsChange" value="no" onChange={()=>setCash(false)}/> Não preciso</label><label><input type="radio" name="needsChange" value="yes" onChange={()=>setCash(true)}/> Preciso</label>{cash&&<label className="mt-3 block font-bold">Troco para quanto?<input required name="changeFor" inputMode="decimal" placeholder="100,00" className="field"/></label>}</fieldset>}

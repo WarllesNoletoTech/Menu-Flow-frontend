@@ -32,8 +32,8 @@ type CatalogContextValue = {
   setProducts: Dispatch<SetStateAction<Product[]>>;
 };
 
-type Addon = { name: string; price: string };
-type Group = { name: string; required: boolean; min: string; max: string; addons: Addon[] };
+type Addon = { _id?: string; name: string; price: string };
+type Group = { _id?: string; name: string; required: boolean; min: string; max: string; addons: Addon[] };
 type ProductForm = {
   name: string;
   categoryId: string;
@@ -496,11 +496,12 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
         available: form.available,
         featured: form.featured,
         addonGroups: form.addonGroups.map((group) => ({
+          ...(group._id ? { _id: group._id } : {}),
           name: group.name.trim(),
           required: group.required,
           min: Number(group.min),
           max: Number(group.max),
-          addons: group.addons.map((addon) => ({ name: addon.name.trim(), price: Number(addon.price) })),
+          addons: group.addons.map((addon) => ({ ...(addon._id ? { _id: addon._id } : {}), name: addon.name.trim(), price: Number(addon.price) })),
         })),
       };
 
@@ -761,7 +762,7 @@ function ProductModal({
                 <input required className="field !mt-0" placeholder="Nome do grupo" value={group.name} onChange={(event) => setGroup(index, { ...group, name: event.target.value })} />
                 <input required min="0" type="number" className="field !mt-0" aria-label="Quantidade mínima" placeholder="Mínimo" value={group.min} onChange={(event) => setGroup(index, { ...group, min: event.target.value })} />
                 <input required min="1" type="number" className="field !mt-0" aria-label="Quantidade máxima" placeholder="Máximo" value={group.max} onChange={(event) => setGroup(index, { ...group, max: event.target.value })} />
-                <label className="flex items-center gap-2 rounded-xl border bg-surface px-3 py-2 font-bold"><input type="checkbox" checked={group.required} onChange={(event) => setGroup(index, { ...group, required: event.target.checked })} /> Obrigatório</label>
+                <label className="flex items-center gap-2 rounded-xl border bg-surface px-3 py-2 font-bold"><input type="checkbox" checked={group.required} onChange={(event) => setGroup(index, { ...group, required: event.target.checked, min: event.target.checked && Number(group.min) < 1 ? '1' : group.min })} /> Obrigatório</label>
               </div>
 
               {group.addons.map((addon, addonIndex) => (
@@ -874,6 +875,7 @@ function validateAddonGroups(groups: Group[]) {
     if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < 1 || min > max || max > group.addons.length) {
       return `Revise as quantidades mínima e máxima do grupo “${groupName}”.`;
     }
+    if (group.required && min < 1) return `O grupo obrigatório “${groupName}” precisa exigir pelo menos uma opção.`;
     if (!group.addons.length) return `Adicione pelo menos uma opção ao grupo “${groupName}”.`;
 
     for (const addon of group.addons) {
