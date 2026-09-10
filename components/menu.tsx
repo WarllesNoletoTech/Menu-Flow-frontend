@@ -10,7 +10,7 @@ type Category = { _id: string; name: string };
 type Addon = { name: string; price: number };
 type AddonGroup = { name: string; required: boolean; min: number; max: number; addons: Addon[] };
 type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string; addonGroups?: AddonGroup[] };
-type Restaurant = { _id: string; name: string; tradeName?: string; description?: string; bannerUrl?: string; logoUrl?: string; open: boolean; establishmentType?: string; city?: string; state?: string };
+type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;city?:string;state?:string;timezone:string;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null} };
 type CartItem = Product & { quantity: number; addonNames: string[] };
 type StoredCartItem = { productId: string; quantity: number; addonNames: string[] };
 
@@ -152,7 +152,7 @@ export function Menu({ slug }: { slug: string }) {
             <section id={category._id} key={category._id} className="scroll-mt-20 pt-7">
               <h2 className="text-xl font-black sm:text-2xl">{category.name}</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {category.products.map((product) => <ProductCard key={product._id} product={product} open={restaurant.open} add={() => product.addonGroups?.length ? (setSelectedProduct(product), setSelectedAddons([])) : add(product)} />)}
+                {category.products.map((product) => <ProductCard key={product._id} product={product} open={restaurant.openingStatus.isOpen===true} add={() => product.addonGroups?.length ? (setSelectedProduct(product), setSelectedAddons([])) : add(product)} />)}
               </div>
             </section>
           ))}</>}
@@ -190,10 +190,11 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
     <div className="px-4 pb-1 pt-12 sm:px-8 sm:pt-14 lg:px-16 lg:pt-20">
       <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
         <h1 className="min-w-0 break-words text-2xl font-black leading-tight sm:text-3xl lg:text-4xl">{restaurant.tradeName || restaurant.name}</h1>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${restaurant.open ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>{restaurant.open ? 'ABERTO AGORA' : 'FECHADO'}</span>
+        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${restaurant.openingStatus.status === 'OPEN' ? 'bg-success/10 text-success' : restaurant.openingStatus.status === 'CLOSED' ? 'bg-danger/10 text-danger' : 'bg-stone-200 text-stone-600'}`}>{restaurant.openingStatus.status === 'OPEN' ? 'ABERTO AGORA' : restaurant.openingStatus.status === 'CLOSED' ? 'FECHADO' : 'HORÁRIO NÃO INFORMADO'}</span>
       </div>
       <p className="mt-2 break-words text-sm font-semibold text-stone-500 sm:text-base">{[typeLabels[restaurant.establishmentType ?? 'RESTAURANT'], location].filter(Boolean).join(' • ')}</p>
       <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-stone-600 sm:text-base">{restaurant.description ?? 'Entrega e retirada no estabelecimento.'}</p>
+      <details className="mt-3 max-w-xl rounded-xl bg-surface p-3 shadow-sm"><summary className="cursor-pointer font-bold text-accent">Horários de funcionamento</summary><div className="mt-3 space-y-2 text-sm">{restaurant.businessHours.length?restaurant.businessHours.map(day=><p key={day.dayOfWeek} className="flex justify-between gap-4 border-t pt-2"><b>{['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][day.dayOfWeek]}</b><span className="text-right">{day.isOpen?day.periods.map(period=>`${period.openTime} — ${period.closeTime}`).join(' · '):'Fechado'}</span></p>):<p>Horários ainda não informados.</p>}<p className="pt-2 text-xs text-stone-400">Fuso: {restaurant.timezone}</p></div></details>
     </div>
   </header>;
 }

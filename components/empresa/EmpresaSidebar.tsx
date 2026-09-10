@@ -8,7 +8,7 @@ import { BrandLogo } from '../BrandLogo';
 
 const links = [
   ['▦', 'Visão geral', '/empresa'], ['▤', 'Pedidos', '/empresa/pedidos'], ['▧', 'Cardápio / Produtos', '/empresa/cardapio'],
-  ['▦', 'Categorias', '/empresa/categorias'], ['♙', 'Funcionários', '/empresa/funcionarios'], ['R$', 'Faturamento', '/empresa/faturamento'], ['▣', 'Dados da empresa', '/empresa/dados'], ['⚙', 'Configurações', '/empresa/configuracoes'],
+  ['▦', 'Categorias', '/empresa/categorias'], ['◷', 'Horários de funcionamento', '/empresa/horarios'], ['♙', 'Funcionários', '/empresa/funcionarios'], ['R$', 'Faturamento', '/empresa/faturamento'], ['▣', 'Dados da empresa', '/empresa/dados'], ['⚙', 'Configurações', '/empresa/configuracoes'],
   ['♙', 'Minha conta', '/empresa/conta'],
 ] as const;
 export function EmpresaSidebar({ open, close }: { open: boolean; close: () => void }) {
