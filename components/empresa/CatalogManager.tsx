@@ -1,10 +1,808 @@
 'use client';
-import Link from 'next/link';import { createContext,FormEvent,useCallback,useContext,useEffect,useMemo,useState } from 'react';import { useEmpresa } from './EmpresaContext';import type { Category,Product } from './types';
-type CatalogContextValue={request:<T>(path:string,init?:RequestInit)=>Promise<T>;base:string;establishment?:{slug?:string}};const CatalogContext=createContext<CatalogContextValue|null>(null);const useCatalog=()=>{const value=useContext(CatalogContext);if(!value)throw new Error('CatalogManager requer contexto');return value};
-type Addon={name:string;price:string};type Group={name:string;required:boolean;min:string;max:string;addons:Addon[]};type ProductForm={name:string;categoryId:string;price:string;promotionalPrice:string;description:string;imageUrl:string;available:boolean;featured:boolean;addonGroups:Group[]};const blank:ProductForm={name:'',categoryId:'',price:'',promotionalPrice:'',description:'',imageUrl:'',available:true,featured:false,addonGroups:[]};
-export function CatalogManager({request,base,establishment}:{request:<T>(path:string,init?:RequestInit)=>Promise<T>;base:string;establishment?:{slug?:string}}){const [tab,setTab]=useState<'products'|'categories'|'preview'>('products');return <CatalogContext.Provider value={{request,base,establishment}}><section className="mx-auto max-w-7xl"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-3xl font-black">Cardápio</h2><p className="text-stone-500">Gerencie produtos, categorias, preços e opções.</p></div></div><nav className="mt-5 flex gap-2" aria-label="Seções do cardápio">{([['products','Produtos'],['categories','Categorias'],['preview','Prévia']] as const).map(([id,label])=><button type="button" aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)} key={id} className={`rounded-xl px-5 py-3 font-bold ${tab===id?'bg-ink text-white':'bg-surface'}`}>{label}</button>)}</nav>{tab==='products'?<ProductsManager/>:tab==='categories'?<CategoriesManager/>:<Preview/>}</section></CatalogContext.Provider>}
-export function MerchantCatalogManager(){const {request,establishment}=useEmpresa();return <CatalogManager request={request} base="/restaurants/me/catalog" establishment={establishment??undefined}/>}
-export function CategoriesManager(){const {request,base}=useCatalog();const [items,setItems]=useState<Category[]>([]);const [name,setName]=useState('');const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const load=useCallback(async()=>{try{setItems(await request<Category[]>(`${base}/categories`));setMessage('')}catch(e){setMessage(msg(e))}},[request]);useEffect(()=>{void load()},[load]);async function add(e:FormEvent){e.preventDefault();setBusy(true);setMessage('Criando categoria…');try{await request(`${base}/categories`,{method:'POST',body:JSON.stringify({name,order:items.length})});setName('');await load();setMessage('Categoria criada.')}catch(e){setMessage(msg(e))}finally{setBusy(false)}}async function update(item:Category,changes:Partial<Category>){setBusy(true);try{await request(`${base}/categories/${item._id}`,{method:'PATCH',body:JSON.stringify(changes)});await load()}catch(e){setMessage(msg(e))}finally{setBusy(false)}}async function move(index:number,delta:number){const next=[...items];const other=index+delta;if(other<0||other>=next.length)return;[next[index],next[other]]=[next[other],next[index]];setBusy(true);try{await request(`${base}/categories/reorder`,{method:'PATCH',body:JSON.stringify(next.map((item,order)=>({id:item._id,order})))});await load()}catch(e){setMessage(msg(e))}finally{setBusy(false)}}return <div className="mt-6"><form onSubmit={add} className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-sm sm:flex-row"><input required className="field !mt-0" placeholder="Nome da nova categoria" value={name} onChange={e=>setName(e.target.value)}/><button disabled={busy} className="rounded-xl bg-ink px-5 py-3 font-bold text-white">{busy?'Criando…':'Criar categoria'}</button></form>{message&&<Notice text={message}/>} {!items.length?<Empty text="Crie sua primeira categoria para começar o cardápio."/>:<div className="mt-4 space-y-3">{items.map((item,index)=><article key={item._id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-surface p-4"><input aria-label="Nome da categoria" className="min-w-48 flex-1 rounded-xl border p-3 font-bold" defaultValue={item.name} onBlur={e=>e.target.value!==item.name&&void update(item,{name:e.target.value})}/><button type="button" disabled={busy} onClick={()=>void update(item,{active:!item.active})} className={`rounded-xl px-4 py-2 text-sm font-bold ${item.active?'bg-success/15 text-success':'bg-stone-200'}`}>{item.active?'Ativa':'Inativa'}</button><button type="button" disabled={busy||index===0} aria-label="Mover para cima" onClick={()=>void move(index,-1)}>↑</button><button type="button" disabled={busy||index===items.length-1} aria-label="Mover para baixo" onClick={()=>void move(index,1)}>↓</button></article>)}</div>}</div>}
-export function ProductsManager(){const {request,base}=useCatalog();const [products,setProducts]=useState<Product[]>([]);const [categories,setCategories]=useState<Category[]>([]);const [form,setForm]=useState<ProductForm>(blank);const [editing,setEditing]=useState<string>();const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [search,setSearch]=useState('');const [category,setCategory]=useState('');const [status,setStatus]=useState('all');const [featured,setFeatured]=useState(false);const load=useCallback(async()=>{try{const [p,c]=await Promise.all([request<Product[]>(`${base}/products`),request<Category[]>(`${base}/categories`)]);setProducts(p);setCategories(c)}catch(e){setMessage(msg(e))}},[request]);useEffect(()=>{void load()},[load]);useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key)},[]);const shown=useMemo(()=>products.filter(p=>(!search||p.name.toLowerCase().includes(search.toLowerCase()))&&(!category||categoryId(p)===category)&&(status==='all'||p.available===(status==='available'))&&(!featured||p.featured)),[products,search,category,status,featured]);function edit(p:Product){setEditing(p._id);setForm({name:p.name,categoryId:categoryId(p),price:String(p.price),promotionalPrice:p.promotionalPrice===undefined?'':String(p.promotionalPrice),description:p.description??'',imageUrl:p.imageUrl??'',available:p.available,featured:p.featured,addonGroups:(p.addonGroups??[]).map(g=>({...g,required:!!g.required,min:String(g.min??0),max:String(g.max??1),addons:g.addons.map(a=>({...a,price:String(a.price)}))}))});setOpen(true)}async function save(e:FormEvent){e.preventDefault();if(!/^[a-f\d]{24}$/i.test(form.categoryId)){setMessage('Selecione uma categoria válida para o produto.');return}const price=Number(form.price),promo=form.promotionalPrice===''?undefined:Number(form.promotionalPrice);if(promo!==undefined&&promo>price){setMessage('O preço promocional não pode superar o preço normal.');return}setBusy(true);setMessage('Salvando produto…');try{const body={categoryId:form.categoryId,name:form.name,price,...(promo!==undefined?{promotionalPrice:promo}:{}),...(form.description.trim()?{description:form.description.trim()}:{}),...(form.imageUrl.trim()?{imageUrl:form.imageUrl.trim()}:{}),available:form.available,featured:form.featured,addonGroups:form.addonGroups.map(g=>({...g,min:Number(g.min),max:Number(g.max),addons:g.addons.map(a=>({...a,price:Number(a.price)}))}))};await request(`${base}/products${editing?`/${editing}`:''}`,{method:editing?'PATCH':'POST',body:JSON.stringify(body)});setOpen(false);setForm(blank);setEditing(undefined);await load();setMessage('Produto salvo com sucesso.')}catch(e){setMessage(msg(e))}finally{setBusy(false)}}async function quick(p:Product,changes:Partial<Product>){setBusy(true);try{await request(`${base}/products/${p._id}`,{method:'PATCH',body:JSON.stringify(changes)});await load()}catch(e){setMessage(msg(e))}finally{setBusy(false)}}return <div className="mt-6"><div className="grid gap-3 rounded-2xl bg-surface p-4 md:grid-cols-5"><input className="field !mt-0" placeholder="Buscar produto…" value={search} onChange={e=>setSearch(e.target.value)}/><select className="field !mt-0" value={category} onChange={e=>setCategory(e.target.value)}><option value="">Todas as categorias</option>{categories.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}</select><select className="field !mt-0" value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Todos</option><option value="available">Disponíveis</option><option value="unavailable">Indisponíveis</option></select><label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={featured} onChange={e=>setFeatured(e.target.checked)}/> Destaques</label><button type="button" disabled={!categories.length} onClick={()=>{setEditing(undefined);setForm({...blank,categoryId:categories[0]?._id??''});setOpen(true)}} className="rounded-xl bg-ink px-4 py-3 font-bold text-white">+ Novo produto</button></div>{message&&<Notice text={message}/>} {!categories.length?<Empty text="Crie sua primeira categoria para começar o cardápio."/>:!products.length?<Empty text="Seu cardápio ainda não possui produtos."/>:<div className="mt-5 grid gap-4 lg:grid-cols-2">{shown.map(p=><article key={p._id} className="flex gap-4 rounded-2xl bg-surface p-4 shadow-sm">{p.imageUrl?<img src={p.imageUrl} alt={p.name} className="h-24 w-24 rounded-xl object-cover"/>:<div className="h-24 w-24 rounded-xl bg-background"/>}<div className="min-w-0 flex-1"><strong>{p.name}</strong><p className="text-xs text-stone-500">{categories.find(c=>c._id===categoryId(p))?.name??'Sem categoria'}</p><p>{p.promotionalPrice!==undefined&&<s className="mr-2">{money(p.price)}</s>}{money(p.promotionalPrice??p.price)}</p><p className="text-xs font-bold">{p.available?'Disponível':'Indisponível'} {p.featured?'· Destaque':''}</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={()=>edit(p)} className="font-bold underline">Editar</button><button type="button" disabled={busy} onClick={()=>void quick(p,{available:!p.available})} className="font-bold underline">{p.available?'Desativar':'Ativar'}</button><button type="button" disabled={busy} onClick={()=>void quick(p,{featured:!p.featured})} className="font-bold underline">{p.featured?'Remover destaque':'Destacar'}</button></div></div></article>)}</div>}{open&&<ProductModal form={form} setForm={setForm} categories={categories} editing={!!editing} busy={busy} close={()=>setOpen(false)} save={save}/>}</div>}
-function ProductModal({form,setForm,categories,editing,busy,close,save}:{form:ProductForm;setForm:(v:ProductForm)=>void;categories:Category[];editing:boolean;busy:boolean;close:()=>void;save:(e:FormEvent)=>void}){const setGroup=(i:number,g:Group)=>setForm({...form,addonGroups:form.addonGroups.map((x,n)=>n===i?g:x)});return <div role="dialog" aria-modal="true" aria-label={editing?'Editar produto':'Novo produto'} className="fixed inset-0 z-[70] overflow-y-auto bg-black/60 p-3 sm:p-8"><form onSubmit={save} className="mx-auto my-3 max-h-[90dvh] max-w-4xl overflow-y-auto rounded-2xl bg-surface p-5 sm:my-0"><header className="flex justify-between"><h3 className="text-2xl font-black">{editing?'Editar produto':'Novo produto'}</h3><button type="button" aria-label="Fechar" onClick={close}>✕</button></header><div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Nome *"><input required className="field" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field><Field label="Categoria *"><select required className="field" value={form.categoryId} onChange={e=>setForm({...form,categoryId:e.target.value})}>{categories.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}</select></Field><Field label="Preço *"><input required min="0" step=".01" type="number" className="field" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></Field><Field label="Preço promocional"><input min="0" step=".01" type="number" className="field" value={form.promotionalPrice} onChange={e=>setForm({...form,promotionalPrice:e.target.value})}/></Field><Field label="URL da imagem HTTPS"><input pattern="https://.*" type="url" className="field" value={form.imageUrl} onChange={e=>setForm({...form,imageUrl:e.target.value})}/>{form.imageUrl&&<img src={form.imageUrl} alt="Prévia do produto" className="mt-2 h-28 w-28 rounded-xl object-cover"/>}</Field><label className="font-bold sm:col-span-2">Descrição<textarea className="field" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></label><label><input type="checkbox" checked={form.available} onChange={e=>setForm({...form,available:e.target.checked})}/> Disponível</label><label><input type="checkbox" checked={form.featured} onChange={e=>setForm({...form,featured:e.target.checked})}/> Destacar produto</label></div><h4 className="mt-7 font-black">Adicionais / opções</h4>{form.addonGroups.map((g,i)=><div key={i} className="mt-3 rounded-xl border p-4"><div className="grid gap-2 sm:grid-cols-4"><input required className="field !mt-0" placeholder="Nome do grupo" value={g.name} onChange={e=>setGroup(i,{...g,name:e.target.value})}/><input required min="0" type="number" className="field !mt-0" aria-label="Mínimo" value={g.min} onChange={e=>setGroup(i,{...g,min:e.target.value})}/><input required min="1" type="number" className="field !mt-0" aria-label="Máximo" value={g.max} onChange={e=>setGroup(i,{...g,max:e.target.value})}/><label><input type="checkbox" checked={g.required} onChange={e=>setGroup(i,{...g,required:e.target.checked})}/> Obrigatório</label></div>{g.addons.map((a,j)=><div key={j} className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(120px,.35fr)_44px]"><input required className="field !mt-0" placeholder="Opção" value={a.name} onChange={e=>setGroup(i,{...g,addons:g.addons.map((x,n)=>n===j?{...x,name:e.target.value}:x)})}/><input required min="0" step=".01" type="number" className="field !mt-0" aria-label="Preço adicional" value={a.price} onChange={e=>setGroup(i,{...g,addons:g.addons.map((x,n)=>n===j?{...x,price:e.target.value}:x)})}/><button type="button" aria-label="Remover opção" onClick={()=>setGroup(i,{...g,addons:g.addons.filter((_,n)=>n!==j)})}>✕</button></div>)}<div className="mt-3 flex gap-3"><button type="button" onClick={()=>setGroup(i,{...g,addons:[...g.addons,{name:'',price:'0'}]})} className="font-bold underline">+ Adicionar opção</button><button type="button" onClick={()=>setForm({...form,addonGroups:form.addonGroups.filter((_,n)=>n!==i)})} className="font-bold text-danger">Remover grupo</button></div></div>)}<button type="button" onClick={()=>setForm({...form,addonGroups:[...form.addonGroups,{name:'',required:false,min:'0',max:'1',addons:[{name:'',price:'0'}]}]})} className="mt-3 font-bold underline">+ Adicionar grupo</button><footer className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={close} className="rounded-xl border px-5 py-3 font-bold">Cancelar</button><button type="submit" disabled={busy} className="rounded-xl bg-ink px-5 py-3 font-bold text-white">{busy?'Salvando…':'Salvar produto'}</button></footer></form></div>}
-function Preview(){const {establishment}=useCatalog();return <div className="mt-6 rounded-2xl bg-surface p-8 text-center">{establishment?.slug?<Link href={`/${establishment.slug}`} className="rounded-xl bg-ink px-5 py-3 font-bold text-white">Ver cardápio público</Link>:<p>O estabelecimento ainda não possui slug.</p>}</div>}function Empty({text}:{text:string}){return <div className="mt-5 rounded-2xl border-2 border-dashed bg-surface p-10 text-center font-bold">{text}</div>}function Notice({text}:{text:string}){return <p aria-live="polite" className="mt-4 rounded-xl bg-surface p-3">{text}</p>}function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="font-bold">{label}{children}</label>}function msg(e:unknown){return e instanceof Error?e.message:'Não foi possível concluir a operação.'}function categoryId(p:Product){return typeof p.categoryId==='string'?p.categoryId:p.categoryId._id}function money(v:number){return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+
+import Link from 'next/link';
+import {
+  createContext,
+  FormEvent,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { useEmpresa } from './EmpresaContext';
+import type { Category, Product } from './types';
+
+type CatalogContextValue = {
+  request: <T>(path: string, init?: RequestInit) => Promise<T>;
+  base: string;
+  establishment?: { slug?: string };
+};
+
+type Addon = { name: string; price: string };
+type Group = { name: string; required: boolean; min: string; max: string; addons: Addon[] };
+type ProductForm = {
+  name: string;
+  categoryId: string;
+  price: string;
+  promotionalPrice: string;
+  description: string;
+  imageUrl: string;
+  available: boolean;
+  featured: boolean;
+  addonGroups: Group[];
+};
+
+type NoticeKind = 'success' | 'error' | 'info';
+type NoticeState = { text: string; kind: NoticeKind } | null;
+
+const blankProduct: ProductForm = {
+  name: '',
+  categoryId: '',
+  price: '',
+  promotionalPrice: '',
+  description: '',
+  imageUrl: '',
+  available: true,
+  featured: false,
+  addonGroups: [],
+};
+
+const CatalogContext = createContext<CatalogContextValue | null>(null);
+
+function useCatalog() {
+  const value = useContext(CatalogContext);
+  if (!value) throw new Error('CatalogManager requer contexto');
+  return value;
+}
+
+export function CatalogManager({
+  request,
+  base,
+  establishment,
+}: {
+  request: <T>(path: string, init?: RequestInit) => Promise<T>;
+  base: string;
+  establishment?: { slug?: string };
+}) {
+  const [tab, setTab] = useState<'products' | 'categories' | 'preview'>('products');
+
+  return (
+    <CatalogContext.Provider value={{ request, base, establishment }}>
+      <section className="mx-auto max-w-7xl">
+        <div>
+          <h2 className="text-3xl font-black">Cardápio</h2>
+          <p className="text-stone-500">Gerencie categorias, produtos, preços, disponibilidade e adicionais.</p>
+        </div>
+
+        <nav className="mt-5 flex flex-wrap gap-2" aria-label="Seções do cardápio">
+          {([
+            ['products', 'Produtos'],
+            ['categories', 'Categorias'],
+            ['preview', 'Prévia'],
+          ] as const).map(([id, label]) => (
+            <button
+              type="button"
+              aria-current={tab === id ? 'page' : undefined}
+              onClick={() => setTab(id)}
+              key={id}
+              className={`rounded-xl px-5 py-3 font-bold ${tab === id ? 'bg-ink text-white' : 'border bg-surface hover:bg-background'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {tab === 'products' ? (
+          <ProductsManager onCreateCategory={() => setTab('categories')} />
+        ) : tab === 'categories' ? (
+          <CategoriesManager />
+        ) : (
+          <Preview />
+        )}
+      </section>
+    </CatalogContext.Provider>
+  );
+}
+
+export function MerchantCatalogManager() {
+  const { request, establishment } = useEmpresa();
+  return <CatalogManager request={request} base="/restaurants/me/catalog" establishment={establishment ?? undefined} />;
+}
+
+export function CategoriesManager() {
+  const { request, base } = useCatalog();
+  const [items, setItems] = useState<Category[]>([]);
+  const [name, setName] = useState('');
+  const [notice, setNotice] = useState<NoticeState>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await request<unknown>(`${base}/categories`, { cache: 'no-store' });
+      setItems(expectArray<Category>(result, 'categorias'));
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [base, request]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setNotice({ text: 'Informe o nome da categoria.', kind: 'error' });
+      return;
+    }
+    if (items.some((item) => item.name.trim().toLocaleLowerCase('pt-BR') === cleanName.toLocaleLowerCase('pt-BR'))) {
+      setNotice({ text: 'Já existe uma categoria com esse nome.', kind: 'error' });
+      return;
+    }
+
+    setBusyId('create');
+    setNotice({ text: 'Criando categoria…', kind: 'info' });
+    try {
+      const created = await request<Category>(`${base}/categories`, {
+        method: 'POST',
+        body: JSON.stringify({ name: cleanName, order: items.length }),
+      });
+      assertEntity(created, 'categoria');
+      setItems((current) => sortByOrder([...current, created]));
+      setName('');
+      setNotice({ text: 'Categoria criada com sucesso.', kind: 'success' });
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function update(item: Category, changes: Partial<Category>) {
+    setBusyId(item._id);
+    try {
+      const updated = await request<Category>(`${base}/categories/${item._id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(changes),
+      });
+      assertEntity(updated, 'categoria');
+      setItems((current) => current.map((entry) => (entry._id === updated._id ? updated : entry)));
+      setNotice({ text: 'Categoria atualizada.', kind: 'success' });
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function move(index: number, delta: number) {
+    const other = index + delta;
+    if (other < 0 || other >= items.length) return;
+
+    const before = items;
+    const reordered = [...items];
+    [reordered[index], reordered[other]] = [reordered[other], reordered[index]];
+    const withOrder = reordered.map((item, order) => ({ ...item, order }));
+    setItems(withOrder);
+    setBusyId('reorder');
+
+    try {
+      await request(`${base}/categories/reorder`, {
+        method: 'PATCH',
+        body: JSON.stringify(withOrder.map((item) => ({ id: item._id, order: item.order }))),
+      });
+      setNotice({ text: 'Ordem das categorias atualizada.', kind: 'success' });
+    } catch (error) {
+      setItems(before);
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <form onSubmit={add} className="flex flex-col gap-3 rounded-2xl border bg-surface p-4 shadow-sm sm:flex-row">
+        <input
+          required
+          maxLength={80}
+          className="field !mt-0"
+          placeholder="Ex.: Pizzas, Hambúrgueres, Bebidas"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <button
+          type="submit"
+          disabled={busyId !== null || !name.trim()}
+          className="rounded-xl bg-ink px-6 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busyId === 'create' ? 'Criando…' : 'Criar categoria'}
+        </button>
+      </form>
+
+      {notice && <Notice state={notice} />}
+
+      {loading ? (
+        <LoadingCard text="Carregando categorias…" />
+      ) : !items.length ? (
+        <Empty text="Crie sua primeira categoria para começar a montar o cardápio." />
+      ) : (
+        <div className="mt-4 space-y-3">
+          {items.map((item, index) => (
+            <CategoryRow
+              key={item._id}
+              item={item}
+              index={index}
+              total={items.length}
+              busy={busyId !== null}
+              saving={busyId === item._id}
+              onUpdate={update}
+              onMove={move}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryRow({
+  item,
+  index,
+  total,
+  busy,
+  saving,
+  onUpdate,
+  onMove,
+}: {
+  item: Category;
+  index: number;
+  total: number;
+  busy: boolean;
+  saving: boolean;
+  onUpdate: (item: Category, changes: Partial<Category>) => Promise<void>;
+  onMove: (index: number, delta: number) => Promise<void>;
+}) {
+  const [draftName, setDraftName] = useState(item.name);
+  useEffect(() => setDraftName(item.name), [item.name]);
+  const cleanName = draftName.trim();
+  const changed = Boolean(cleanName) && cleanName !== item.name;
+
+  return (
+    <article className="flex flex-col gap-3 rounded-2xl border bg-surface p-4 sm:flex-row sm:items-end">
+      <div className="min-w-0 flex-1">
+        <label className="text-xs font-bold uppercase tracking-wide text-stone-500">Nome</label>
+        <input
+          aria-label={`Nome da categoria ${item.name}`}
+          maxLength={80}
+          className="field !mt-1 font-bold"
+          value={draftName}
+          disabled={saving}
+          onChange={(event) => setDraftName(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || !changed}
+          onClick={() => void onUpdate(item, { name: cleanName })}
+          className="rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-40"
+        >
+          {saving ? 'Salvando…' : 'Salvar nome'}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onUpdate(item, { active: !item.active })}
+          className={`rounded-xl px-4 py-2 text-sm font-bold ${item.active ? 'bg-success/15 text-success' : 'bg-stone-200 text-stone-600'}`}
+        >
+          {item.active ? 'Ativa' : 'Inativa'}
+        </button>
+        <button
+          type="button"
+          disabled={busy || index === 0}
+          aria-label={`Mover ${item.name} para cima`}
+          title="Mover para cima"
+          onClick={() => void onMove(index, -1)}
+          className="rounded-xl border bg-surface px-3 py-2 font-bold disabled:opacity-30"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          disabled={busy || index === total - 1}
+          aria-label={`Mover ${item.name} para baixo`}
+          title="Mover para baixo"
+          onClick={() => void onMove(index, 1)}
+          className="rounded-xl border bg-surface px-3 py-2 font-bold disabled:opacity-30"
+        >
+          ↓
+        </button>
+      </div>
+    </article>
+  );
+}
+
+export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => void }) {
+  const { request, base } = useCatalog();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [form, setForm] = useState<ProductForm>(blankProduct);
+  const [editing, setEditing] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<NoticeState>(null);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [status, setStatus] = useState<'all' | 'available' | 'unavailable'>('all');
+  const [featured, setFeatured] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [productResult, categoryResult] = await Promise.all([
+        request<unknown>(`${base}/products`, { cache: 'no-store' }),
+        request<unknown>(`${base}/categories`, { cache: 'no-store' }),
+      ]);
+      setProducts(expectArray<Product>(productResult, 'produtos'));
+      setCategories(expectArray<Category>(categoryResult, 'categorias'));
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [base, request]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && busyId !== 'save') setOpen(false);
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [busyId]);
+
+  const shown = useMemo(
+    () =>
+      products.filter(
+        (product) =>
+          (!search || product.name.toLowerCase().includes(search.toLowerCase())) &&
+          (!category || categoryId(product) === category) &&
+          (status === 'all' || product.available === (status === 'available')) &&
+          (!featured || product.featured),
+      ),
+    [products, search, category, status, featured],
+  );
+
+  function startCreate() {
+    if (!categories.length) {
+      setNotice({ text: 'Crie pelo menos uma categoria antes de adicionar produtos.', kind: 'info' });
+      onCreateCategory();
+      return;
+    }
+    setEditing(undefined);
+    setForm({ ...blankProduct, categoryId: categories[0]._id });
+    setOpen(true);
+  }
+
+  function edit(product: Product) {
+    setEditing(product._id);
+    setForm({
+      name: product.name,
+      categoryId: categoryId(product),
+      price: String(product.price),
+      promotionalPrice: product.promotionalPrice === undefined ? '' : String(product.promotionalPrice),
+      description: product.description ?? '',
+      imageUrl: product.imageUrl ?? '',
+      available: product.available,
+      featured: product.featured,
+      addonGroups: (product.addonGroups ?? []).map((group) => ({
+        ...group,
+        required: Boolean(group.required),
+        min: String(group.min ?? 0),
+        max: String(group.max ?? 1),
+        addons: group.addons.map((addon) => ({ ...addon, price: String(addon.price) })),
+      })),
+    });
+    setOpen(true);
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const cleanName = form.name.trim();
+    if (!cleanName) {
+      setNotice({ text: 'Informe o nome do produto.', kind: 'error' });
+      return;
+    }
+    if (!/^[a-f\d]{24}$/i.test(form.categoryId)) {
+      setNotice({ text: 'Selecione uma categoria válida para o produto.', kind: 'error' });
+      return;
+    }
+
+    const price = Number(form.price);
+    const promo = form.promotionalPrice === '' ? undefined : Number(form.promotionalPrice);
+    if (!Number.isFinite(price) || price < 0) {
+      setNotice({ text: 'Informe um preço válido.', kind: 'error' });
+      return;
+    }
+    if (promo !== undefined && (!Number.isFinite(promo) || promo < 0 || promo > price)) {
+      setNotice({ text: 'O preço promocional deve ser válido e não pode superar o preço normal.', kind: 'error' });
+      return;
+    }
+
+    const addonError = validateAddonGroups(form.addonGroups);
+    if (addonError) {
+      setNotice({ text: addonError, kind: 'error' });
+      return;
+    }
+
+    setBusyId('save');
+    setNotice({ text: 'Salvando produto…', kind: 'info' });
+    try {
+      const description = form.description.trim();
+      const imageUrl = form.imageUrl.trim();
+      const body = {
+        categoryId: form.categoryId,
+        name: cleanName,
+        price,
+        ...(editing ? { promotionalPrice: promo ?? null } : promo !== undefined ? { promotionalPrice: promo } : {}),
+        ...(editing ? { description: description || null } : description ? { description } : {}),
+        ...(editing ? { imageUrl: imageUrl || null } : imageUrl ? { imageUrl } : {}),
+        available: form.available,
+        featured: form.featured,
+        addonGroups: form.addonGroups.map((group) => ({
+          name: group.name.trim(),
+          required: group.required,
+          min: Number(group.min),
+          max: Number(group.max),
+          addons: group.addons.map((addon) => ({ name: addon.name.trim(), price: Number(addon.price) })),
+        })),
+      };
+
+      const saved = await request<Product>(`${base}/products${editing ? `/${editing}` : ''}`, {
+        method: editing ? 'PATCH' : 'POST',
+        body: JSON.stringify(body),
+      });
+      assertEntity(saved, 'produto');
+      setProducts((current) => {
+        if (editing) return current.map((product) => (product._id === saved._id ? saved : product));
+        return [...current, saved];
+      });
+      setOpen(false);
+      setForm(blankProduct);
+      setEditing(undefined);
+      setNotice({ text: 'Produto salvo com sucesso.', kind: 'success' });
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function quick(product: Product, changes: Partial<Product>) {
+    setBusyId(product._id);
+    try {
+      const updated = await request<Product>(`${base}/products/${product._id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(changes),
+      });
+      assertEntity(updated, 'produto');
+      setProducts((current) => current.map((entry) => (entry._id === updated._id ? updated : entry)));
+      setNotice({ text: 'Produto atualizado.', kind: 'success' });
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="grid gap-3 rounded-2xl border bg-surface p-4 lg:grid-cols-[minmax(220px,1.3fr)_minmax(190px,1fr)_minmax(170px,.8fr)_auto_auto] lg:items-center">
+        <input className="field !mt-0" placeholder="Buscar produto…" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <select className="field !mt-0" value={category} onChange={(event) => setCategory(event.target.value)}>
+          <option value="">Todas as categorias</option>
+          {categories.map((item) => (
+            <option key={item._id} value={item._id}>{item.name}</option>
+          ))}
+        </select>
+        <select className="field !mt-0" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+          <option value="all">Todos</option>
+          <option value="available">Disponíveis</option>
+          <option value="unavailable">Indisponíveis</option>
+        </select>
+        <label className="flex min-h-11 items-center gap-2 rounded-xl px-2 font-bold">
+          <input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} /> Destaques
+        </label>
+        <button type="button" onClick={startCreate} className="rounded-xl bg-ink px-5 py-3 font-bold text-white">
+          + Novo produto
+        </button>
+      </div>
+
+      {notice && <Notice state={notice} />}
+
+      {loading ? (
+        <LoadingCard text="Carregando produtos…" />
+      ) : !categories.length ? (
+        <EmptyAction
+          text="Antes de adicionar produtos, crie a primeira categoria do seu cardápio."
+          action="Criar categoria"
+          onClick={onCreateCategory}
+        />
+      ) : !products.length ? (
+        <EmptyAction text="Seu cardápio ainda não possui produtos." action="Adicionar primeiro produto" onClick={startCreate} />
+      ) : !shown.length ? (
+        <Empty text="Nenhum produto corresponde aos filtros atuais." />
+      ) : (
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          {shown.map((product) => (
+            <article key={product._id} className="flex gap-4 rounded-2xl border bg-surface p-4 shadow-sm">
+              {product.imageUrl ? (
+                <img src={product.imageUrl} alt={product.name} className="h-24 w-24 shrink-0 rounded-xl object-cover" />
+              ) : (
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-background text-2xl" aria-hidden="true">🍽</div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <strong className="break-words text-lg">{product.name}</strong>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${product.available ? 'bg-success/15 text-success' : 'bg-stone-200 text-stone-600'}`}>
+                    {product.available ? 'Disponível' : 'Indisponível'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-stone-500">{categories.find((item) => item._id === categoryId(product))?.name ?? 'Sem categoria'}</p>
+                <p className="mt-2 font-bold">
+                  {product.promotionalPrice !== undefined && <s className="mr-2 font-normal text-stone-400">{money(product.price)}</s>}
+                  {money(product.promotionalPrice ?? product.price)}
+                </p>
+                {product.featured && <span className="mt-2 inline-flex rounded-full bg-accent/15 px-2.5 py-1 text-xs font-bold text-accent">Destaque</span>}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => edit(product)} className="rounded-lg border px-3 py-2 text-sm font-bold">Editar</button>
+                  <button
+                    type="button"
+                    disabled={busyId !== null}
+                    onClick={() => void quick(product, { available: !product.available })}
+                    className="rounded-lg border px-3 py-2 text-sm font-bold disabled:opacity-50"
+                  >
+                    {busyId === product._id ? 'Salvando…' : product.available ? 'Desativar' : 'Ativar'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId !== null}
+                    onClick={() => void quick(product, { featured: !product.featured })}
+                    className="rounded-lg border px-3 py-2 text-sm font-bold disabled:opacity-50"
+                  >
+                    {product.featured ? 'Remover destaque' : 'Destacar'}
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <ProductModal
+          form={form}
+          setForm={setForm}
+          categories={categories}
+          editing={Boolean(editing)}
+          busy={busyId === 'save'}
+          close={() => {
+            if (busyId !== 'save') setOpen(false);
+          }}
+          save={save}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProductModal({
+  form,
+  setForm,
+  categories,
+  editing,
+  busy,
+  close,
+  save,
+}: {
+  form: ProductForm;
+  setForm: (value: ProductForm) => void;
+  categories: Category[];
+  editing: boolean;
+  busy: boolean;
+  close: () => void;
+  save: (event: FormEvent) => void;
+}) {
+  const setGroup = (index: number, group: Group) => {
+    setForm({ ...form, addonGroups: form.addonGroups.map((entry, position) => (position === index ? group : entry)) });
+  };
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label={editing ? 'Editar produto' : 'Novo produto'} className="fixed inset-0 z-[70] overflow-y-auto bg-black/60 p-3 sm:p-8">
+      <form onSubmit={save} className="mx-auto my-3 max-w-4xl rounded-2xl bg-surface p-5 shadow-2xl sm:my-0 sm:p-7">
+        <header className="flex items-start justify-between gap-4 border-b pb-4">
+          <div>
+            <h3 className="text-2xl font-black">{editing ? 'Editar produto' : 'Novo produto'}</h3>
+            <p className="mt-1 text-sm text-stone-500">Preencha os dados principais e, se quiser, adicione opções ao produto.</p>
+          </div>
+          <button type="button" disabled={busy} aria-label="Fechar" onClick={close} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-50">✕</button>
+        </header>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Field label="Nome *"><input required maxLength={120} className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
+          <Field label="Categoria *">
+            <select required className="field" value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}>
+              {categories.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Preço *"><input required min="0" step="0.01" inputMode="decimal" type="number" className="field" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></Field>
+          <Field label="Preço promocional"><input min="0" step="0.01" inputMode="decimal" type="number" className="field" value={form.promotionalPrice} onChange={(event) => setForm({ ...form, promotionalPrice: event.target.value })} /></Field>
+          <Field label="URL da imagem (HTTPS)">
+            <input pattern="https://.*" type="url" className="field" placeholder="https://..." value={form.imageUrl} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} />
+            {form.imageUrl && <img src={form.imageUrl} alt="Prévia do produto" className="mt-2 h-28 w-28 rounded-xl object-cover" />}
+          </Field>
+          <label className="font-bold sm:col-span-2">Descrição<textarea maxLength={600} rows={4} className="field resize-y" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+          <label className="flex items-center gap-2 rounded-xl border p-3 font-bold"><input type="checkbox" checked={form.available} onChange={(event) => setForm({ ...form, available: event.target.checked })} /> Disponível para venda</label>
+          <label className="flex items-center gap-2 rounded-xl border p-3 font-bold"><input type="checkbox" checked={form.featured} onChange={(event) => setForm({ ...form, featured: event.target.checked })} /> Destacar no cardápio</label>
+        </div>
+
+        <div className="mt-7 border-t pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="font-black">Adicionais / opções</h4>
+              <p className="text-sm text-stone-500">Ex.: tamanho, ponto da carne, adicionais ou acompanhamentos.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, addonGroups: [...form.addonGroups, { name: '', required: false, min: '0', max: '1', addons: [{ name: '', price: '0' }] }] })}
+              className="rounded-xl border px-4 py-2 font-bold"
+            >
+              + Adicionar grupo
+            </button>
+          </div>
+
+          {form.addonGroups.map((group, index) => (
+            <div key={index} className="mt-4 rounded-2xl border bg-background/40 p-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <input required className="field !mt-0" placeholder="Nome do grupo" value={group.name} onChange={(event) => setGroup(index, { ...group, name: event.target.value })} />
+                <input required min="0" type="number" className="field !mt-0" aria-label="Quantidade mínima" placeholder="Mínimo" value={group.min} onChange={(event) => setGroup(index, { ...group, min: event.target.value })} />
+                <input required min="1" type="number" className="field !mt-0" aria-label="Quantidade máxima" placeholder="Máximo" value={group.max} onChange={(event) => setGroup(index, { ...group, max: event.target.value })} />
+                <label className="flex items-center gap-2 rounded-xl border bg-surface px-3 py-2 font-bold"><input type="checkbox" checked={group.required} onChange={(event) => setGroup(index, { ...group, required: event.target.checked })} /> Obrigatório</label>
+              </div>
+
+              {group.addons.map((addon, addonIndex) => (
+                <div key={addonIndex} className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(130px,.35fr)_48px]">
+                  <input required className="field !mt-0" placeholder="Nome da opção" value={addon.name} onChange={(event) => setGroup(index, { ...group, addons: group.addons.map((entry, position) => position === addonIndex ? { ...entry, name: event.target.value } : entry) })} />
+                  <input required min="0" step="0.01" inputMode="decimal" type="number" className="field !mt-0" aria-label="Preço adicional" value={addon.price} onChange={(event) => setGroup(index, { ...group, addons: group.addons.map((entry, position) => position === addonIndex ? { ...entry, price: event.target.value } : entry) })} />
+                  <button type="button" aria-label="Remover opção" title="Remover opção" onClick={() => setGroup(index, { ...group, addons: group.addons.filter((_, position) => position !== addonIndex) })} className="rounded-xl border text-danger">✕</button>
+                </div>
+              ))}
+
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button type="button" onClick={() => setGroup(index, { ...group, addons: [...group.addons, { name: '', price: '0' }] })} className="rounded-lg border px-3 py-2 text-sm font-bold">+ Adicionar opção</button>
+                <button type="button" onClick={() => setForm({ ...form, addonGroups: form.addonGroups.filter((_, position) => position !== index) })} className="rounded-lg border px-3 py-2 text-sm font-bold text-danger">Remover grupo</button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <footer className="mt-7 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+          <button type="button" disabled={busy} onClick={close} className="rounded-xl border px-5 py-3 font-bold disabled:opacity-50">Cancelar</button>
+          <button type="submit" disabled={busy} className="rounded-xl bg-ink px-6 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy ? 'Salvando…' : 'Salvar produto'}</button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function Preview() {
+  const { establishment } = useCatalog();
+  return (
+    <div className="mt-6 rounded-2xl border bg-surface p-8 text-center">
+      {establishment?.slug ? (
+        <Link href={`/${establishment.slug}`} className="inline-flex rounded-xl bg-ink px-5 py-3 font-bold text-white">Ver cardápio público</Link>
+      ) : (
+        <p>O estabelecimento ainda não possui slug.</p>
+      )}
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return <div className="mt-5 rounded-2xl border-2 border-dashed bg-surface p-10 text-center font-bold">{text}</div>;
+}
+
+function EmptyAction({ text, action, onClick }: { text: string; action: string; onClick: () => void }) {
+  return (
+    <div className="mt-5 rounded-2xl border-2 border-dashed bg-surface p-8 text-center">
+      <p className="font-bold">{text}</p>
+      <button type="button" onClick={onClick} className="mt-4 rounded-xl bg-ink px-5 py-3 font-bold text-white">{action}</button>
+    </div>
+  );
+}
+
+function LoadingCard({ text }: { text: string }) {
+  return <div className="mt-5 animate-pulse rounded-2xl border bg-surface p-10 text-center font-bold text-stone-500">{text}</div>;
+}
+
+function Notice({ state }: { state: Exclude<NoticeState, null> }) {
+  const classes = state.kind === 'error'
+    ? 'border-danger/20 bg-danger/10 text-danger'
+    : state.kind === 'success'
+      ? 'border-success/20 bg-success/10 text-success'
+      : 'border-border bg-surface text-stone-600';
+  return <p role={state.kind === 'error' ? 'alert' : 'status'} aria-live="polite" className={`mt-4 rounded-xl border p-3 font-medium ${classes}`}>{state.text}</p>;
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="font-bold">{label}{children}</label>;
+}
+
+function msg(error: unknown) {
+  return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+}
+
+function categoryId(product: Product) {
+  return typeof product.categoryId === 'string' ? product.categoryId : product.categoryId._id;
+}
+
+function money(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function expectArray<T>(value: unknown, label: string): T[] {
+  if (!Array.isArray(value)) throw new Error(`A API retornou uma resposta inválida para ${label}.`);
+  return value as T[];
+}
+
+function assertEntity(value: unknown, label: string): asserts value is { _id: string } {
+  if (!value || typeof value !== 'object' || !('_id' in value) || typeof (value as { _id?: unknown })._id !== 'string') {
+    throw new Error(`A API não confirmou a criação/atualização da ${label}.`);
+  }
+}
+
+function sortByOrder<T extends { order: number }>(items: T[]) {
+  return [...items].sort((a, b) => a.order - b.order);
+}
+
+function validateAddonGroups(groups: Group[]) {
+  const groupNames = new Set<string>();
+  const addonNames = new Set<string>();
+  for (const group of groups) {
+    const groupName = group.name.trim();
+    if (!groupName) return 'Informe o nome de todos os grupos de adicionais.';
+    const normalizedGroup = groupName.toLocaleLowerCase('pt-BR');
+    if (groupNames.has(normalizedGroup)) return 'Os grupos de adicionais precisam ter nomes diferentes.';
+    groupNames.add(normalizedGroup);
+
+    const min = Number(group.min);
+    const max = Number(group.max);
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < 1 || min > max || max > group.addons.length) {
+      return `Revise as quantidades mínima e máxima do grupo “${groupName}”.`;
+    }
+    if (!group.addons.length) return `Adicione pelo menos uma opção ao grupo “${groupName}”.`;
+
+    for (const addon of group.addons) {
+      const addonName = addon.name.trim();
+      if (!addonName) return `Informe o nome de todas as opções do grupo “${groupName}”.`;
+      const normalizedAddon = addonName.toLocaleLowerCase('pt-BR');
+      if (addonNames.has(normalizedAddon)) return `A opção “${addonName}” está duplicada neste produto.`;
+      addonNames.add(normalizedAddon);
+      const addonPrice = Number(addon.price);
+      if (!Number.isFinite(addonPrice) || addonPrice < 0) return `Informe um preço válido para a opção “${addonName}”.`;
+    }
+  }
+  return null;
+}
