@@ -3,21 +3,33 @@
 import Link from 'next/link';
 import {
   createContext,
+  Dispatch,
   FormEvent,
   ReactNode,
+  SetStateAction,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useEmpresa } from './EmpresaContext';
 import type { Category, Product } from './types';
+import { RequestSequencer } from '../../lib/request-sequencer';
 
 type CatalogContextValue = {
   request: <T>(path: string, init?: RequestInit) => Promise<T>;
   base: string;
   establishment?: { slug?: string };
+  categories: Category[];
+  products: Product[];
+  loading: boolean;
+  loadError: string | null;
+  refresh: () => Promise<void>;
+  invalidateLoads: () => void;
+  setCategories: Dispatch<SetStateAction<Category[]>>;
+  setProducts: Dispatch<SetStateAction<Product[]>>;
 };
 
 type Addon = { name: string; price: string };
@@ -67,9 +79,42 @@ export function CatalogManager({
   establishment?: { slug?: string };
 }) {
   const [tab, setTab] = useState<'products' | 'categories' | 'preview'>('products');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requestSequence = useRef(new RequestSequencer());
+
+  const invalidateLoads = useCallback(() => {
+    requestSequence.current.invalidate();
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const sequence = requestSequence.current.begin();
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [categoryResult, productResult] = await Promise.all([
+        request<unknown>(`${base}/categories`, { cache: 'no-store' }),
+        request<unknown>(`${base}/products`, { cache: 'no-store' }),
+      ]);
+      if (!requestSequence.current.isCurrent(sequence)) return;
+      setCategories(sortByOrder(expectArray<Category>(categoryResult, 'categorias')));
+      setProducts(expectArray<Product>(productResult, 'produtos'));
+    } catch (error) {
+      if (requestSequence.current.isCurrent(sequence)) setLoadError(msg(error));
+    } finally {
+      if (requestSequence.current.isCurrent(sequence)) setLoading(false);
+    }
+  }, [base, request]);
+
+  useEffect(() => {
+    void refresh();
+    return invalidateLoads;
+  }, [invalidateLoads, refresh]);
 
   return (
-    <CatalogContext.Provider value={{ request, base, establishment }}>
+    <CatalogContext.Provider value={{ request, base, establishment, categories, products, loading, loadError, refresh, invalidateLoads, setCategories, setProducts }}>
       <section className="mx-auto max-w-7xl">
         <div>
           <h2 className="text-3xl font-black">Cardápio</h2>
@@ -112,29 +157,10 @@ export function MerchantCatalogManager() {
 }
 
 export function CategoriesManager() {
-  const { request, base } = useCatalog();
-  const [items, setItems] = useState<Category[]>([]);
+  const { request, base, categories: items, products, loading, loadError, refresh, invalidateLoads, setCategories: setItems } = useCatalog();
   const [name, setName] = useState('');
   const [notice, setNotice] = useState<NoticeState>(null);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await request<unknown>(`${base}/categories`, { cache: 'no-store' });
-      setItems(expectArray<Category>(result, 'categorias'));
-    } catch (error) {
-      setNotice({ text: msg(error), kind: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [base, request]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   async function add(event: FormEvent) {
     event.preventDefault();
     const cleanName = name.trim();
@@ -148,14 +174,16 @@ export function CategoriesManager() {
     }
 
     setBusyId('create');
-    setNotice({ text: 'Criando categoria…', kind: 'info' });
+    setNotice(null);
     try {
       const created = await request<Category>(`${base}/categories`, {
         method: 'POST',
         body: JSON.stringify({ name: cleanName, order: items.length }),
       });
       assertEntity(created, 'categoria');
-      setItems((current) => sortByOrder([...current, created]));
+      invalidateLoads();
+      setItems((current) => sortByOrder([...current.filter((item) => item._id !== created._id), created]));
+      await refresh();
       setName('');
       setNotice({ text: 'Categoria criada com sucesso.', kind: 'success' });
     } catch (error) {
@@ -173,8 +201,31 @@ export function CategoriesManager() {
         body: JSON.stringify(changes),
       });
       assertEntity(updated, 'categoria');
+      invalidateLoads();
       setItems((current) => current.map((entry) => (entry._id === updated._id ? updated : entry)));
+      await refresh();
       setNotice({ text: 'Categoria atualizada.', kind: 'success' });
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function archive(item: Category) {
+    const count = products.filter((product) => categoryId(product) === item._id && !product.archivedAt).length;
+    if (count > 0) {
+      setNotice({ text: `A categoria possui ${count} produto(s). Arquive ou mova esses produtos primeiro.`, kind: 'error' });
+      return;
+    }
+    if (!window.confirm(`Arquivar a categoria “${item.name}”?`)) return;
+    setBusyId(item._id);
+    try {
+      await request(`${base}/categories/${item._id}/archive`, { method: 'PATCH' });
+      invalidateLoads();
+      setItems((current) => current.filter((entry) => entry._id !== item._id));
+      await refresh();
+      setNotice({ text: 'Categoria arquivada com segurança.', kind: 'success' });
     } catch (error) {
       setNotice({ text: msg(error), kind: 'error' });
     } finally {
@@ -227,7 +278,7 @@ export function CategoriesManager() {
         </button>
       </form>
 
-      {notice && <Notice state={notice} />}
+      {(notice || loadError) && <Notice state={notice ?? { text: loadError!, kind: 'error' }} />}
 
       {loading ? (
         <LoadingCard text="Carregando categorias…" />
@@ -245,6 +296,7 @@ export function CategoriesManager() {
               saving={busyId === item._id}
               onUpdate={update}
               onMove={move}
+              onArchive={archive}
             />
           ))}
         </div>
@@ -261,6 +313,7 @@ function CategoryRow({
   saving,
   onUpdate,
   onMove,
+  onArchive,
 }: {
   item: Category;
   index: number;
@@ -269,6 +322,7 @@ function CategoryRow({
   saving: boolean;
   onUpdate: (item: Category, changes: Partial<Category>) => Promise<void>;
   onMove: (index: number, delta: number) => Promise<void>;
+  onArchive: (item: Category) => Promise<void>;
 }) {
   const [draftName, setDraftName] = useState(item.name);
   useEffect(() => setDraftName(item.name), [item.name]);
@@ -325,45 +379,25 @@ function CategoryRow({
         >
           ↓
         </button>
+        <button type="button" disabled={busy} onClick={() => void onArchive(item)} className="rounded-xl border px-4 py-2 text-sm font-bold text-danger disabled:opacity-40">
+          Arquivar
+        </button>
       </div>
     </article>
   );
 }
 
 export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => void }) {
-  const { request, base } = useCatalog();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { request, base, products, categories, loading, loadError, refresh, invalidateLoads, setProducts } = useCatalog();
   const [form, setForm] = useState<ProductForm>(blankProduct);
   const [editing, setEditing] = useState<string>();
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState<'all' | 'available' | 'unavailable'>('all');
   const [featured, setFeatured] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [productResult, categoryResult] = await Promise.all([
-        request<unknown>(`${base}/products`, { cache: 'no-store' }),
-        request<unknown>(`${base}/categories`, { cache: 'no-store' }),
-      ]);
-      setProducts(expectArray<Product>(productResult, 'produtos'));
-      setCategories(expectArray<Category>(categoryResult, 'categorias'));
-    } catch (error) {
-      setNotice({ text: msg(error), kind: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [base, request]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -448,7 +482,7 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
     }
 
     setBusyId('save');
-    setNotice({ text: 'Salvando produto…', kind: 'info' });
+    setNotice(null);
     try {
       const description = form.description.trim();
       const imageUrl = form.imageUrl.trim();
@@ -475,10 +509,12 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
         body: JSON.stringify(body),
       });
       assertEntity(saved, 'produto');
+      invalidateLoads();
       setProducts((current) => {
         if (editing) return current.map((product) => (product._id === saved._id ? saved : product));
         return [...current, saved];
       });
+      await refresh();
       setOpen(false);
       setForm(blankProduct);
       setEditing(undefined);
@@ -498,8 +534,49 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
         body: JSON.stringify(changes),
       });
       assertEntity(updated, 'produto');
+      invalidateLoads();
       setProducts((current) => current.map((entry) => (entry._id === updated._id ? updated : entry)));
+      await refresh();
       setNotice({ text: 'Produto atualizado.', kind: 'success' });
+    } catch (error) {
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function moveProduct(product: Product, delta: number) {
+    const siblings = products.filter((item) => categoryId(item) === categoryId(product));
+    const index = siblings.findIndex((item) => item._id === product._id);
+    const other = index + delta;
+    if (other < 0 || other >= siblings.length) return;
+    const before = products;
+    [siblings[index], siblings[other]] = [siblings[other], siblings[index]];
+    const reordered = siblings.map((item, order) => ({ ...item, order }));
+    setProducts((current) => current.map((item) => reordered.find((entry) => entry._id === item._id) ?? item));
+    setBusyId('reorder');
+    try {
+      await request(`${base}/products/reorder`, { method: 'PATCH', body: JSON.stringify(reordered.map((item) => ({ id: item._id, order: item.order }))) });
+      invalidateLoads();
+      await refresh();
+      setNotice({ text: 'Ordem dos produtos atualizada.', kind: 'success' });
+    } catch (error) {
+      setProducts(before);
+      setNotice({ text: msg(error), kind: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function archive(product: Product) {
+    if (!window.confirm(`Arquivar o produto “${product.name}”?`)) return;
+    setBusyId(product._id);
+    try {
+      await request(`${base}/products/${product._id}/archive`, { method: 'PATCH' });
+      invalidateLoads();
+      setProducts((current) => current.filter((entry) => entry._id !== product._id));
+      await refresh();
+      setNotice({ text: 'Produto arquivado com segurança.', kind: 'success' });
     } catch (error) {
       setNotice({ text: msg(error), kind: 'error' });
     } finally {
@@ -530,7 +607,7 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
         </button>
       </div>
 
-      {notice && <Notice state={notice} />}
+      {(notice || loadError) && <Notice state={notice ?? { text: loadError!, kind: 'error' }} />}
 
       {loading ? (
         <LoadingCard text="Carregando produtos…" />
@@ -584,6 +661,11 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
                   >
                     {product.featured ? 'Remover destaque' : 'Destacar'}
                   </button>
+                  <button type="button" disabled={busyId !== null} onClick={() => void archive(product)} className="rounded-lg border px-3 py-2 text-sm font-bold text-danger disabled:opacity-50">
+                    Arquivar
+                  </button>
+                  <button type="button" aria-label={`Mover ${product.name} para cima`} disabled={busyId !== null || products.filter((item) => categoryId(item) === categoryId(product)).findIndex((item) => item._id === product._id) === 0} onClick={() => void moveProduct(product, -1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↑</button>
+                  <button type="button" aria-label={`Mover ${product.name} para baixo`} disabled={busyId !== null || products.filter((item) => categoryId(item) === categoryId(product)).findIndex((item) => item._id === product._id) === products.filter((item) => categoryId(item) === categoryId(product)).length - 1} onClick={() => void moveProduct(product, 1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↓</button>
                 </div>
               </div>
             </article>
