@@ -34,7 +34,7 @@ export function Menu({ slug }: { slug: string }) {
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch(apiUrl(`/restaurants/${slug}`));
+        const response = await fetch(apiUrl(`/restaurants/${slug}`), { cache: 'no-store' });
         if (!response.ok) throw new Error('Estabelecimento não encontrado');
         const data = await response.json() as Restaurant;
         setRestaurant(data);
@@ -62,6 +62,15 @@ export function Menu({ slug }: { slug: string }) {
       }
     })();
   }, [slug, cartKey]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void fetch(apiUrl(`/restaurants/${slug}`), { cache: 'no-store' })
+        .then(async (response) => { if (response.ok) setRestaurant(await response.json() as Restaurant); })
+        .catch(() => undefined);
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [slug]);
 
   useEffect(() => {
     if (hydratedCartKey !== cartKey) return;
