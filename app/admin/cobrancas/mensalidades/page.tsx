@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useDashboard } from "../../../../components/dashboard/DashboardContext";
 import { getSession } from "../../../../lib/auth";
 import { apiUrl } from "../../../../lib/api";
+import { buildWhatsAppUrl, normalizeWhatsAppText } from "../../../../lib/whatsapp";
 type Restaurant = { _id: string; name: string; tradeName?: string };
 type Settings = { pixReceiverName?: string; pixKey?: string };
 type Preview = {
@@ -30,7 +31,7 @@ type Report = {
   reportRecipient?: { name: string; reportWhatsapp?: string } | null;
 };
 const money = (v: number) =>
-  (v / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  normalizeWhatsAppText((v / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 const labels: Record<string, string> = {
   DRAFT: "Rascunho",
   GENERATED: "Gerado",
@@ -208,8 +209,33 @@ export default function Page() {
         setMessage("PDF baixado. WhatsApp para relatórios não cadastrado.");
         return;
       }
-      const text = `RELATÓRIO DE SERVIÇOS - MENU FLOW\n\nRelatório: ${r.reportNumber}\nEstabelecimento: ${r.restaurantId.tradeName || r.restaurantId.name}\nPeríodo: ${date(r.periodStart)} a ${date(r.periodEnd)}\nPedidos contabilizados: ${r.orderCount}\n\nTaxas Menu Flow cobradas nos pedidos:\n${money(r.serviceFeeTotalCents)}\n\nMensalidade:\n${money(r.monthlyFeeCents)}\n\nTotal do relatório:\n${money(r.totalCents)}\n\nDados para pagamento via PIX:\nFavorecido: ${r.paymentSnapshot?.pixReceiverName || "Não informado"}\nChave PIX: ${r.paymentSnapshot?.pixKey || "Não informada"}\n\nStatus: ${labels[r.status] ?? r.status}\n\nO PDF do relatório foi baixado e pode ser anexado nesta conversa.\n\nO relatório também está disponível no painel do Menu Flow.\n\nMenu Flow\nCardápios mais simples, clientes mais felizes.`;
-      const wa = `https://wa.me/${recipient.reportWhatsapp}?text=${encodeURIComponent(text)}`;
+      const text = normalizeWhatsAppText(`RELATÓRIO DE SERVIÇOS - MENU FLOW
+
+Olá, ${recipient.name}!
+
+Segue o relatório de serviços do Menu Flow referente ao período informado.
+
+Relatório: ${r.reportNumber}
+Estabelecimento: ${r.restaurantId.tradeName || r.restaurantId.name}
+Período: ${date(r.periodStart)} a ${date(r.periodEnd)}
+Pedidos contabilizados: ${r.orderCount}
+
+Taxas de serviço Menu Flow: ${money(r.serviceFeeTotalCents)}
+Mensalidade: ${r.includeMonthlyFee ? money(r.monthlyFeeCents) : "Não incluída"}
+Total do relatório: ${money(r.totalCents)}
+
+DADOS PARA PAGAMENTO VIA PIX
+Favorecido: ${r.paymentSnapshot?.pixReceiverName || "Não informado"}
+Chave PIX: ${r.paymentSnapshot?.pixKey || "Não informada"}
+
+Status: ${labels[r.status] ?? r.status}
+
+O PDF do relatório foi baixado e pode ser anexado nesta conversa. O mesmo relatório também permanece disponível no painel do Menu Flow.
+
+Atenciosamente,
+Menu Flow
+Cardápios mais simples, clientes mais felizes.`);
+      const wa = buildWhatsAppUrl(recipient.reportWhatsapp, text);
       if (popup) popup.location.href = wa;
       else window.open(wa, "_blank", "noopener,noreferrer");
       setMessage(

@@ -9,14 +9,14 @@ type BrandLogoProps = {
 const assets = {
   full: {
     src: '/assets/branding/menu-flow-logo.png',
-    width: 1005,
-    height: 795,
-    alt: 'Menu Flow — Cardápios mais simples, clientes mais felizes',
+    width: 1024,
+    height: 1024,
+    alt: 'Menu Flow',
   },
   wordmark: {
     src: '/assets/branding/menu-flow-wordmark.png',
-    width: 980,
-    height: 193,
+    width: 1400,
+    height: 438,
     alt: 'Menu Flow',
   },
   symbol: {
@@ -33,7 +33,7 @@ export function BrandLogo({ variant = 'full', className = '', priority = false }
   return (
     <span
       data-priority={priority || undefined}
-      className={`inline-block max-w-full overflow-hidden bg-[#fefbf4] align-middle ${className}`}
+      className={`inline-block max-w-full overflow-hidden bg-transparent align-middle ${className}`}
     >
       <Image
         src={asset.src}
