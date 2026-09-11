@@ -419,6 +419,13 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
     [products, search, category, status, featured],
   );
 
+  const catalogStats = useMemo(() => ({
+    total: products.length,
+    available: products.filter((product) => product.available).length,
+    featured: products.filter((product) => product.featured).length,
+    promotions: products.filter((product) => product.promotionalPrice !== undefined && product.promotionalPrice < product.price).length,
+  }), [products]);
+
   function startCreate() {
     if (!categories.length) {
       setNotice({ text: 'Crie pelo menos uma categoria antes de adicionar produtos.', kind: 'info' });
@@ -608,6 +615,13 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
         </button>
       </div>
 
+      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <CatalogStat label="Produtos" value={catalogStats.total} />
+        <CatalogStat label="Disponíveis" value={catalogStats.available} />
+        <CatalogStat label="Em destaque" value={catalogStats.featured} accent />
+        <CatalogStat label="Em promoção" value={catalogStats.promotions} danger />
+      </div>
+
       {(notice || loadError) && <Notice state={notice ?? { text: loadError!, kind: 'error' }} />}
 
       {loading ? (
@@ -625,13 +639,14 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
       ) : (
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           {shown.map((product) => (
-            <article key={product._id} className="flex gap-4 rounded-2xl border bg-surface p-4 shadow-sm">
+            <article key={product._id} className={`relative flex gap-4 overflow-hidden rounded-2xl border bg-surface p-4 shadow-sm transition hover:shadow-soft ${product.featured ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border'}`}>
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt={product.name} className="h-24 w-24 shrink-0 rounded-xl object-cover" />
               ) : (
                 <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-background text-2xl" aria-hidden="true">🍽</div>
               )}
               <div className="min-w-0 flex-1">
+                {product.featured && <span className="mb-2 inline-flex rounded-full bg-accent px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">★ Destaque</span>}
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <strong className="break-words text-lg">{product.name}</strong>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${product.available ? 'bg-success/15 text-success' : 'bg-stone-200 text-stone-600'}`}>
@@ -640,10 +655,9 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
                 </div>
                 <p className="mt-1 text-xs text-stone-500">{categories.find((item) => item._id === categoryId(product))?.name ?? 'Sem categoria'}</p>
                 <p className="mt-2 font-bold">
-                  {product.promotionalPrice !== undefined && <s className="mr-2 font-normal text-stone-400">{money(product.price)}</s>}
-                  {money(product.promotionalPrice ?? product.price)}
+                  {product.promotionalPrice !== undefined && <><span className="mr-2 rounded-full bg-danger/10 px-2 py-1 text-[10px] font-black uppercase text-danger">Oferta</span><s className="mr-2 font-bold text-danger decoration-2">{money(product.price)}</s></>}
+                  <span className="text-lg text-ink">{money(product.promotionalPrice ?? product.price)}</span>
                 </p>
-                {product.featured && <span className="mt-2 inline-flex rounded-full bg-accent/15 px-2.5 py-1 text-xs font-bold text-accent">Destaque</span>}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" onClick={() => edit(product)} className="rounded-lg border px-3 py-2 text-sm font-bold">Editar</button>
                   <button
@@ -818,6 +832,10 @@ function EmptyAction({ text, action, onClick }: { text: string; action: string; 
 
 function LoadingCard({ text }: { text: string }) {
   return <div className="mt-5 animate-pulse rounded-2xl border bg-surface p-10 text-center font-bold text-stone-500">{text}</div>;
+}
+
+function CatalogStat({ label, value, accent = false, danger = false }: { label: string; value: number; accent?: boolean; danger?: boolean }) {
+  return <div className={`rounded-2xl border bg-surface p-4 shadow-sm ${accent ? 'border-accent/30' : danger ? 'border-danger/20' : 'border-border'}`}><p className="text-xs font-bold uppercase tracking-wide text-stone-500">{label}</p><p className={`mt-1 text-2xl font-black ${accent ? 'text-accent' : danger ? 'text-danger' : 'text-ink'}`}>{value}</p></div>;
 }
 
 function Notice({ state }: { state: Exclude<NoticeState, null> }) {

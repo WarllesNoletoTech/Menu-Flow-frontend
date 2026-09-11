@@ -15,12 +15,13 @@ import { BrandLogo } from './BrandLogo';
 type Category = { _id: string; name: string };
 type Addon = { _id: string; name: string; price: number; priceCents?: number };
 type AddonGroup = { _id: string; name: string; required: boolean; min: number; max: number; addons: Addon[] };
-type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string; addonGroups?: AddonGroup[] };
+type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string | { _id?: string }; available?: boolean; featured?: boolean; addonGroups?: AddonGroup[] };
 type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;establishmentTypeName?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;orderWhatsapp?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;deliveryAvailable:boolean;deliveryUnavailableReason?:string;minimumOrderCents:number;customerServiceFeeCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};acceptingOrders:boolean;canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;coverageType?:'ALL'|'SPECIFIC';fee:number;feeCents?:number;active?:boolean}>;paymentMethods:Array<{_id:string;name:string;method:string;active?:boolean}> };
 type CartItem = Product & { quantity: number; addonNames: string[] };
 type StoredCartItem = { productId: string; quantity: number; addonNames: string[] };
 
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const entityId = (value: Product['categoryId']) => typeof value === 'string' ? value : value?._id;
 
 export function Menu({ slug }: { slug: string }) {
   const { user, login, logout } = useAuth();
@@ -46,7 +47,7 @@ export function Menu({ slug }: { slug: string }) {
         const data = await response.json() as Restaurant;
         setRestaurant(data);
         setFulfillment(data.pickupEnabled ? 'PICKUP' : 'DELIVERY');
-        const menuResponse = await fetch(apiUrl(`/restaurants/${data._id}/menu`));
+        const menuResponse = await fetch(apiUrl(`/restaurants/${data._id}/menu`), { cache: 'no-store' });
         if (!menuResponse.ok) throw new Error('Não foi possível carregar o cardápio');
         const result = await menuResponse.json() as { categories: Category[]; products: Product[] };
         setCategories(result.categories);
@@ -102,12 +103,36 @@ export function Menu({ slug }: { slug: string }) {
   }, [selectedProduct, checkout, authGate]);
 
   const openCheckout = async () => {
+    setMessage(undefined);
+    setCheckout(false);
     const session = getSession();
-    if (!session || session.user.role !== 'CUSTOMER') { setAuthGate('welcome'); return; }
-    try { const response = await fetch(apiUrl('/auth/me'), { headers: { Authorization: `Bearer ${session.accessToken}` }, cache: 'no-store' }); if (!response.ok) throw new Error(); const profile = await response.json() as AuthSession['user']; if (profile.role !== 'CUSTOMER') { setAuthGate('welcome'); return; } setCheckout(true); }
-    catch { clearSession(); logout(); setMessage('Sua sessão expirou. Entre novamente para continuar.'); setAuthGate('login'); }
+    if (!session || session.user.role !== 'CUSTOMER') {
+      setAuthGate('welcome');
+      return;
+    }
+    try {
+      const response = await fetch(apiUrl('/auth/me'), { headers: { Authorization: `Bearer ${session.accessToken}` }, cache: 'no-store' });
+      if (!response.ok) throw new Error();
+      const profile = await response.json() as AuthSession['user'];
+      if (profile.role !== 'CUSTOMER') {
+        setAuthGate('welcome');
+        return;
+      }
+      setAuthGate(undefined);
+      setCheckout(true);
+    } catch {
+      clearSession();
+      logout();
+      setMessage('Sua sessão expirou. Entre novamente para continuar.');
+      setAuthGate('login');
+    }
   };
-  const authenticated = (session: AuthSession) => { login(session); setAuthGate(undefined); setCheckout(true); };
+  const authenticated = (session: AuthSession) => {
+    login(session);
+    setMessage(undefined);
+    setAuthGate(undefined);
+    setCheckout(true);
+  };
 
   const addonPrice = (product: Product, names: string[]) => (product.addonGroups ?? [])
     .flatMap((group) => group.addons)
@@ -117,10 +142,10 @@ export function Menu({ slug }: { slug: string }) {
   const visibleCategories = useMemo(() => {
     const categoryIds = new Set(categories.map((category) => category._id));
     const sections = categories.flatMap((category) => {
-      const categoryProducts = products.filter((product) => product.categoryId === category._id);
+      const categoryProducts = products.filter((product) => entityId(product.categoryId) === category._id);
       return categoryProducts.length ? [{ ...category, products: categoryProducts }] : [];
     });
-    const uncategorizedProducts = products.filter((product) => !product.categoryId || !categoryIds.has(product.categoryId));
+    const uncategorizedProducts = products.filter((product) => { const id = entityId(product.categoryId); return !id || !categoryIds.has(id); });
     return uncategorizedProducts.length
       ? [...sections, { _id: 'outros', name: 'Outros', products: uncategorizedProducts }]
       : sections;
@@ -142,6 +167,13 @@ export function Menu({ slug }: { slug: string }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!restaurant || submitting) return;
+    const customerSession = getSession();
+    if (!customerSession || customerSession.user.role !== 'CUSTOMER') {
+      setCheckout(false);
+      setAuthGate('welcome');
+      setMessage('Entre ou crie uma conta de cliente para finalizar seu pedido.');
+      return;
+    }
     setSubmitting(true);
     // Reserve a user-initiated tab before the asynchronous POST; navigate it only after the order is saved.
     const whatsappWindow = restaurant.orderWhatsapp ? window.open('about:blank', '_blank') : null;
@@ -155,9 +187,8 @@ export function Menu({ slug }: { slug: string }) {
       changeForCents: form.get('needsChange') === 'yes' ? parseMoneyToCents(String(form.get('changeFor'))) : undefined,
       items: cart.map(({ _id, quantity, addonNames, addonGroups }) => ({ productId: _id, quantity, addons: addonNames.map(name => { const group = (addonGroups ?? []).find(g => g.addons.some(a => a.name === name))!; const addon = group.addons.find(a => a.name === name)!; return { groupId: group._id, addonId: addon._id }; }) })),
     };
-    const session = getSession();
     try {
-      const response = await fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(), ...(session?.user.role === 'CUSTOMER' ? { Authorization: `Bearer ${session.accessToken}` } : {}) }, body: JSON.stringify(payload) });
+      const response = await fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(), Authorization: `Bearer ${customerSession.accessToken}` }, body: JSON.stringify(payload) });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) { whatsappWindow?.close(); clearSession(); logout(); setCheckout(false); setAuthGate('login'); setMessage(response.status === 401 ? 'Sua sessão expirou. Entre novamente para continuar.' : 'Para realizar pedidos, entre com uma conta de cliente.'); return; }
         const data = await response.json().catch(() => null) as { message?: string | string[] } | null;
@@ -192,10 +223,10 @@ export function Menu({ slug }: { slug: string }) {
             </section>
           ))}</>}
         </div>
-        <aside className="hidden lg:block"><div className="sticky top-24"><CartPanel cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} checkout={openCheckout} /></div></aside>
+        <aside className="hidden lg:block"><div className="sticky top-24"><CartPanel cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} checkout={openCheckout} requiresCustomerAuth={user?.role !== 'CUSTOMER'} /></div></aside>
       </div>
       {selectedProduct && <ProductModal product={selectedProduct} selected={selectedAddons} toggle={toggleAddon} close={() => setSelectedProduct(undefined)} canAdd={canAddSelectedProduct} total={(selectedProduct.promotionalPrice ?? selectedProduct.price) + addonPrice(selectedProduct, selectedAddons)} confirm={() => { add(selectedProduct, selectedAddons); setSelectedProduct(undefined); }} />}
-      {cart.length > 0 && <MobileCartBar count={itemCount} subtotal={subtotal} open={openCheckout} />}
+      {cart.length > 0 && <MobileCartBar count={itemCount} subtotal={subtotal} open={openCheckout} requiresCustomerAuth={user?.role !== 'CUSTOMER'} />}
       {checkout && <CheckoutModal restaurant={restaurant} cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} close={() => setCheckout(false)} submit={submit} fulfillment={fulfillment} setFulfillment={setFulfillment} customer={user?.role === 'CUSTOMER' ? user : undefined} submitting={submitting} />}
       {authGate && <CustomerAuthModal mode={authGate} setMode={setAuthGate} close={() => setAuthGate(undefined)} complete={authenticated} wrongRole={Boolean(user && user.role !== 'CUSTOMER')} />}
     </main>
@@ -247,24 +278,26 @@ function EmptyMenu() {
 }
 
 function ProductCard({ product, open, add }: { product: Product; open: boolean; add: () => void }) {
-  return <article className="flex min-h-36 min-w-0 gap-3 rounded-2xl border border-border bg-surface p-3 shadow-sm transition hover:shadow-soft sm:gap-4 sm:p-4">
-    {product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" className="h-24 w-24 shrink-0 rounded-xl object-cover sm:h-28 sm:w-28" /> : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-stone-100 to-lime/30 text-2xl font-black text-ink/40 sm:h-28 sm:w-28" aria-label="Produto sem imagem">MF</div>}
-    <div className="flex min-w-0 flex-1 flex-col"><h3 className="break-words font-black">{product.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-500">{product.description || 'Confira este produto.'}</p>
-      <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-3"><span className="whitespace-nowrap">{product.promotionalPrice != null && <><span className="mr-2 rounded-full bg-lime/30 px-2 py-1 text-[10px] font-black">OFERTA</span><del className="mr-1 text-xs text-stone-400">{money(product.price)}</del></>}<b>{money(product.promotionalPrice ?? product.price)}</b></span><button type="button" disabled={!open} onClick={add} className="min-h-11 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Adicionar</button></div>
+  const hasPromotion = product.promotionalPrice != null && product.promotionalPrice < product.price;
+  return <article className={`group relative flex min-h-40 min-w-0 gap-3 overflow-hidden rounded-2xl border bg-surface p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-soft sm:gap-4 sm:p-4 ${product.featured ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border'}`}>
+    {product.featured && <div className="absolute right-3 top-3 z-10 rounded-full bg-accent px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm">★ Destaque</div>}
+    {product.imageUrl ? <img src={product.imageUrl} alt={product.name} loading="lazy" className="h-28 w-28 shrink-0 rounded-xl object-cover transition duration-200 group-hover:scale-[1.02] sm:h-32 sm:w-32" /> : <div className="grid h-28 w-28 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-stone-100 to-lime/30 text-2xl font-black text-ink/40 sm:h-32 sm:w-32" aria-label="Produto sem imagem">MF</div>}
+    <div className="flex min-w-0 flex-1 flex-col pt-1"><h3 className={`break-words pr-20 text-base font-black sm:text-lg ${product.featured ? 'text-ink' : ''}`}>{product.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-500">{product.description || 'Confira este produto.'}</p>
+      <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-4"><div className="min-w-0">{hasPromotion && <div className="mb-1 flex flex-wrap items-center gap-2"><span className="rounded-full bg-danger/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-danger">Oferta</span><del className="text-sm font-bold text-danger decoration-2">{money(product.price)}</del></div>}<b className="text-lg text-ink">{money(product.promotionalPrice ?? product.price)}</b></div><button type="button" disabled={!open} onClick={add} className="min-h-11 rounded-xl bg-ink px-4 py-2 text-sm font-black text-white transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40">Adicionar</button></div>
     </div>
   </article>;
 }
 
-function CartPanel({ cart, subtotal, addonPrice, setQuantity, checkout }: { cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; checkout: () => void }) {
-  return <section className="rounded-3xl border border-border bg-surface p-5 shadow-soft"><h2 className="text-xl font-black">Sua sacola</h2>{cart.length === 0 ? <div className="py-10 text-center text-stone-500"><span className="text-4xl" aria-hidden>🛒</span><p className="mt-3 font-bold">Sua sacola está vazia</p><p className="mt-1 text-sm">Adicione produtos para começar.</p></div> : <>{cart.map((item) => <CartRow key={`${item._id}-${item.addonNames.join()}`} item={item} addonPrice={addonPrice} setQuantity={setQuantity} />)}<div className="mt-5 flex justify-between border-t pt-4 text-lg font-black"><span>Subtotal</span><span className="whitespace-nowrap">{money(subtotal)}</span></div><button type="button" onClick={checkout} className="mt-4 min-h-12 w-full rounded-xl bg-ink px-4 font-black text-white">FINALIZAR PEDIDO</button></>}</section>;
+function CartPanel({ cart, subtotal, addonPrice, setQuantity, checkout, requiresCustomerAuth }: { cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; checkout: () => void; requiresCustomerAuth: boolean }) {
+  return <section className="rounded-3xl border border-border bg-surface p-5 shadow-soft"><h2 className="text-xl font-black">Sua sacola</h2>{cart.length === 0 ? <div className="py-10 text-center text-stone-500"><span className="text-4xl" aria-hidden>🛒</span><p className="mt-3 font-bold">Sua sacola está vazia</p><p className="mt-1 text-sm">Adicione produtos para começar.</p></div> : <>{cart.map((item) => <CartRow key={`${item._id}-${item.addonNames.join()}`} item={item} addonPrice={addonPrice} setQuantity={setQuantity} />)}<div className="mt-5 flex justify-between border-t pt-4 text-lg font-black"><span>Subtotal</span><span className="whitespace-nowrap">{money(subtotal)}</span></div>{requiresCustomerAuth&&<p className="mt-3 rounded-xl bg-background p-3 text-xs font-semibold leading-5 text-stone-600">Para finalizar o pedido, entre na sua conta de cliente ou crie um cadastro. Sua sacola será mantida.</p>}<button type="button" onClick={checkout} className="mt-4 min-h-12 w-full rounded-xl bg-ink px-4 font-black text-white">{requiresCustomerAuth?'ENTRAR PARA FINALIZAR':'FINALIZAR PEDIDO'}</button></>}</section>;
 }
 
 function CartRow({ item, addonPrice, setQuantity }: { item: CartItem; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void }) {
   return <div className="mt-4 border-t pt-4 first:border-0"><div className="flex justify-between gap-3"><div className="min-w-0"><b className="break-words">{item.name}</b>{item.addonNames.length > 0 && <p className="break-words text-xs text-stone-500">{item.addonNames.join(', ')}</p>}<p className="mt-1 whitespace-nowrap text-sm font-bold">{money((item.promotionalPrice ?? item.price) + addonPrice(item, item.addonNames))}</p></div><div className="flex h-11 shrink-0 items-center rounded-xl border"><button type="button" aria-label={`Diminuir ${item.name}`} className="h-11 w-11" onClick={() => setQuantity(item, item.quantity - 1)}>−</button><b className="min-w-5 text-center">{item.quantity}</b><button type="button" aria-label={`Aumentar ${item.name}`} className="h-11 w-11" onClick={() => setQuantity(item, item.quantity + 1)}>+</button></div></div></div>;
 }
 
-function MobileCartBar({ count, subtotal, open }: { count: number; subtotal: number; open: () => void }) {
-  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface/95 px-4 pt-3 shadow-2xl backdrop-blur lg:hidden" style={{ paddingBottom: 'max(.75rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-xl bg-ink px-5 font-black text-white"><span>🛒 VER SACOLA · {count} {count === 1 ? 'item' : 'itens'}</span><span className="whitespace-nowrap">{money(subtotal)}</span></button></aside>;
+function MobileCartBar({ count, subtotal, open, requiresCustomerAuth }: { count: number; subtotal: number; open: () => void; requiresCustomerAuth: boolean }) {
+  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface/95 px-4 pt-3 shadow-2xl backdrop-blur lg:hidden" style={{ paddingBottom: 'max(.75rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-xl bg-ink px-5 font-black text-white"><span>{requiresCustomerAuth?'ENTRAR PARA FINALIZAR':`FINALIZAR · ${count} ${count === 1 ? 'item' : 'itens'}`}</span><span className="whitespace-nowrap">{money(subtotal)}</span></button></aside>;
 }
 
 function ModalFrame({ label, close, children, sheet = false }: { label: string; close: () => void; children: React.ReactNode; sheet?: boolean }) {
