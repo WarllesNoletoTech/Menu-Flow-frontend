@@ -36,7 +36,7 @@ export async function authenticatedRequest<T>(path: string, init?: RequestInit):
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${session.accessToken}`,
-        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init?.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
         ...init?.headers,
       },
     });
