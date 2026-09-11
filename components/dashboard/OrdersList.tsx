@@ -1,75 +1,67 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/authenticated-request';
 import { paymentMethodLabel } from '../../lib/payment-methods';
 import { useOrderSocket } from '../../lib/order-socket';
 import { useDashboard } from './DashboardContext';
 
-type Order = { _id:string; orderNumber:string; publicToken?:string; customerName:string; phone:string; total:number; totalCents?:number; subtotalCents?:number; deliveryFeeCents?:number; customerServiceFeeCents?:number; discountCents?:number; status:string; createdAt:string; fulfillment:string; paymentMethod:string; needsChange?:boolean; changeForCents?:number; expectedChangeCents?:number; rejectionReason?:string; address?:Record<string,string>; items:Array<{productName:string;quantity:number;observation?:string;addons:Array<{name:string;groupName?:string}>}>; restaurantId?:{name?:string;tradeName?:string} };
+type Order = { _id:string; orderNumber:string; publicToken?:string; customerName:string; phone:string; total:number; totalCents?:number; subtotalCents?:number; deliveryFeeCents?:number; customerServiceFeeCents?:number; discountCents?:number; status:string; createdAt:string; fulfillment:string; paymentMethod:string; needsChange?:boolean; changeForCents?:number; expectedChangeCents?:number; rejectionReason?:string; cancellationReason?:string; address?:Record<string,string>; items:Array<{productName:string;quantity:number;observation?:string;addons:Array<{name:string;groupName?:string}>}>; restaurantId?:{name?:string;tradeName?:string} };
 export const orderStatus: Record<string,string> = { PENDING:'Aguardando aceitação', NEW:'Novo', ACCEPTED:'Aceito', PREPARING:'Em preparo', READY:'Pronto', OUT_FOR_DELIVERY:'Saiu para entrega', COMPLETED:'Concluído', REJECTED:'Recusado', CANCELLED:'Cancelado' };
-const actions: Record<string,Array<[string,string]>> = { PENDING:[['REJECTED','Recusar'],['ACCEPTED','Aceitar']], ACCEPTED:[['PREPARING','Iniciar preparo']], PREPARING:[['READY','Marcar como pronto']], READY:[['OUT_FOR_DELIVERY','Saiu para entrega'],['COMPLETED','Concluir']], OUT_FOR_DELIVERY:[['COMPLETED','Marcar entregue']] };
+const actions: Record<string,Array<[string,string]>> = { PENDING:[['REJECTED','Recusar'],['ACCEPTED','Aceitar pedido']], ACCEPTED:[['PREPARING','Iniciar preparo']], PREPARING:[['READY','Marcar como pronto']], READY:[['OUT_FOR_DELIVERY','Saiu para entrega'],['COMPLETED','Concluir']], OUT_FOR_DELIVERY:[['COMPLETED','Concluir']] };
 const money = (value:number) => (value/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const groups = {
+  pending:{label:'Para aceitar',api:'pending',statuses:['PENDING'],empty:'Nenhum pedido aguardando aceitação.'},
+  'in-progress':{label:'Em andamento',api:'in_progress',statuses:['ACCEPTED','PREPARING','READY','OUT_FOR_DELIVERY'],empty:'Nenhum pedido em andamento.'},
+  completed:{label:'Finalizados',api:'completed',statuses:['COMPLETED'],empty:'Nenhum pedido finalizado.'},
+  cancelled:{label:'Cancelados',api:'cancelled',statuses:['REJECTED','CANCELLED'],empty:'Nenhum pedido cancelado.'},
+} as const;
+type Group = keyof typeof groups;
+type Counts = {pending:number;inProgress:number;completed:number;cancelled:number};
+type PageResponse = {items:Order[];page:number;limit:number;total:number;hasMore:boolean;counts:Counts};
+type TabState = {items:Order[];page:number;hasMore:boolean;loaded:boolean};
+const blankTab=():TabState=>({items:[],page:0,hasMore:false,loaded:false});
+const groupFor=(status:string):Group|undefined=>(Object.entries(groups).find(([,value])=>(value.statuses as readonly string[]).includes(status))?.[0] as Group|undefined);
+const countFor=(counts:Counts,key:Group)=>key==='in-progress'?counts.inProgress:counts[key];
+const dedupeSort=(orders:Order[])=>Array.from(new Map(orders.map(order=>[order._id,order])).values()).sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime());
+function actionErrorMessage(error: unknown) { if (!(error instanceof ApiError)) return 'Não foi possível atualizar o pedido. Tente novamente.'; if(error.status===400)return error.message;if(error.status===401)return'Sua sessão expirou. Entre novamente.';if(error.status===403)return'Você não possui permissão para alterar este pedido.';if(error.status===404)return'Pedido não encontrado.';if(error.status===409)return'Este pedido já mudou de status. Atualizamos os dados.';return'Não foi possível atualizar o pedido. Tente novamente.'; }
 
-function actionErrorMessage(error: unknown) {
-  if (!(error instanceof ApiError)) return 'Não foi possível atualizar o pedido. Tente novamente.';
-  if (error.status === 400) return error.message;
-  if (error.status === 401) return 'Sua sessão expirou. Entre novamente.';
-  if (error.status === 403) return 'Você não possui permissão para alterar este pedido.';
-  if (error.status === 404) return 'Pedido não encontrado.';
-  if (error.status === 409) return 'Este pedido já mudou de status. Atualizamos os dados.';
-  return 'Não foi possível atualizar o pedido. Tente novamente.';
+export function OrdersList(props:{customer?:boolean;employee?:boolean;restaurantId?:string}) {
+  if(props.restaurantId&&!props.customer&&!props.employee)return <MerchantOrders restaurantId={props.restaurantId}/>;
+  return <LegacyOrders {...props}/>;
 }
 
-export function OrdersList({customer=false,employee=false,restaurantId}:{customer?:boolean;employee?:boolean;restaurantId?:string}) {
-  const {request}=useDashboard();
-  const [orders,setOrders]=useState<Order[]>([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState('');
-  const [actionError,setActionError]=useState<{orderId:string;message:string}>();
-  const [success,setSuccess]=useState('');
-  const [reject,setReject]=useState<Order>();
-  const [updatingOrderId,setUpdatingOrderId]=useState<string>();
-  const [updatingStatus,setUpdatingStatus]=useState<string>();
-  const path=customer?'/customer/orders':employee?'/employee/orders':restaurantId?`/restaurants/${restaurantId}/orders`:'';
-  const load=useCallback(async(showLoading=false)=>{if(!path)return;if(showLoading)setLoading(true);try{setOrders(await request<Order[]>(path));setError('')}catch(e){setError(e instanceof ApiError&&e.status===401?'Sua sessão expirou. Entre novamente.':e instanceof ApiError&&e.status===403?'Você não possui permissão para consultar os pedidos.':e instanceof ApiError&&e.status&&e.status>=500?'Não foi possível carregar os pedidos.':e instanceof Error?e.message:'Não foi possível carregar os pedidos.')}finally{if(showLoading)setLoading(false)}},[path,request]);
-  useOrderSocket(useCallback(()=>{load().catch(()=>undefined)},[load]));
-  useEffect(()=>{load(true).catch(()=>undefined);const timer=setInterval(()=>load().catch(()=>undefined),30000);return()=>clearInterval(timer)},[load]);
-
-  async function handleStatusChange(order:Order,status:string,reason?:string) {
-    if(updatingOrderId)return;
-    const endpoint=employee?`/employee/orders/${order._id}/status`:`/restaurants/${restaurantId}/orders/${order._id}/status`;
-    setUpdatingOrderId(order._id);setUpdatingStatus(status);setActionError(undefined);setSuccess('');
-    try {
-      const updated=await request<Order>(endpoint,{method:'PATCH',body:JSON.stringify({status,...(reason?{reason}:{})})});
-      setOrders(current=>current.map(item=>item._id===updated._id?updated:item));
-      setReject(undefined);
-      setSuccess(status==='ACCEPTED'?'Pedido aceito.':status==='REJECTED'?'Pedido recusado.':'Status do pedido atualizado.');
-      window.dispatchEvent(new CustomEvent('menu-flow:orders-updated'));
-    } catch (caught) {
-      setActionError({orderId:order._id,message:actionErrorMessage(caught)});
-      if(caught instanceof ApiError&&caught.status===409) await load();
-      throw caught;
-    } finally { setUpdatingOrderId(undefined);setUpdatingStatus(undefined); }
-  }
-
-  if(loading)return <p className="mt-5 rounded-xl bg-surface p-4">Carregando pedidos…</p>;
-  if(error)return <p role="alert" className="mt-5 rounded-xl bg-danger/10 p-4 font-bold text-danger">{error}</p>;
-  return <div className="mt-5 grid gap-4 xl:grid-cols-2">
-    {success&&<p role="status" className="xl:col-span-2 rounded-xl bg-success/10 p-3 font-bold text-success">{success}</p>}
-    {orders.map(o=><article key={o._id} className={`min-w-0 rounded-2xl border bg-surface p-5 shadow-sm ${o.status==='PENDING'?'border-accent ring-2 ring-accent/20':''}`}>
-      <header className="flex flex-wrap justify-between gap-2"><div><strong className="text-lg">#{o.orderNumber||o._id.slice(-6)}</strong><p className="text-sm text-stone-500">{o.customerName} • {new Date(o.createdAt).toLocaleString('pt-BR')}</p></div><span className="h-fit rounded-full bg-background px-3 py-2 text-xs font-black">{o.status==='READY'&&o.fulfillment==='PICKUP'?'Pronto para retirada':orderStatus[o.status]||o.status}</span></header>
-      {customer?<><p className="mt-4">{o.restaurantId?.tradeName||o.restaurantId?.name} · {o.fulfillment==='DELIVERY'?'Entrega':'Retirada'}</p><p className="mt-2">Pagamento: <b>{paymentMethodLabel(o.paymentMethod)}</b></p><Link className="mt-4 inline-flex rounded-xl bg-ink px-4 py-3 font-bold text-white" href={`/acompanhar/${o.orderNumber}?token=${encodeURIComponent(o.publicToken||'')}`}>{['COMPLETED','REJECTED','CANCELLED'].includes(o.status)?'Ver detalhes':'Acompanhar pedido'}</Link></>:<><div className="mt-4 space-y-3 border-y py-4">{o.items?.map((item,i)=><div key={i}><b>{item.quantity}x {item.productName}</b>{item.addons?.length>0&&<p className="text-sm text-stone-500">+ {item.addons.map(a=>a.name).join(', ')}</p>}{item.observation&&<p className="text-sm">Obs.: {item.observation}</p>}</div>)}</div><div className="mt-4 text-sm"><p><b>{o.fulfillment==='DELIVERY'?'ENTREGA':'RETIRADA'}</b></p>{o.address&&<div className="mt-2"><p>{o.address.street}, {o.address.number}</p><p>{o.address.neighborhood}</p><p>{o.address.city} - {o.address.state} · CEP {o.address.zipCode}</p>{o.address.complement&&<p>Complemento: {o.address.complement}</p>}{o.address.reference&&<p>Referência: {o.address.reference}</p>}<p className="mt-1">Taxa de entrega: <b>{money(o.deliveryFeeCents??0)}</b></p></div>}<p className="mt-2">Pagamento: <b>{paymentMethodLabel(o.paymentMethod)}</b></p>{o.paymentMethod==='CASH'&&<p>Troco: <b>{o.needsChange?`para ${money(o.changeForCents||0)} · estimado ${money(o.expectedChangeCents||0)}`:'não precisa'}</b></p>}</div></>}
-      <div className="mt-4 space-y-1 text-sm"><p className="flex justify-between"><span>Subtotal</span><b>{money(o.subtotalCents??0)}</b></p><p className="flex justify-between"><span>Taxa de serviço Menu Flow</span><b>{money(o.customerServiceFeeCents??0)}</b></p><p className="flex justify-between text-lg font-black"><span>Total pago pelo cliente</span><span>{money(o.totalCents??Math.round(o.total*100))}</span></p></div>
-      {!customer&&<div className="mt-4 flex flex-wrap justify-end gap-2">{(actions[o.status]||[]).filter(([status])=>!(o.fulfillment==='PICKUP'&&status==='OUT_FOR_DELIVERY')).map(([status,label])=>{const busy=updatingOrderId===o._id;return <button key={status} disabled={Boolean(updatingOrderId)} onClick={async()=>{if(status==='REJECTED'){setActionError(undefined);setReject(o);return}try{await handleStatusChange(o,status)}catch{}}} className={`rounded-xl px-4 py-3 font-bold disabled:opacity-50 ${status==='REJECTED'?'border text-danger':'bg-ink text-white'}`}>{busy&&updatingStatus===status?(status==='ACCEPTED'?'Aceitando...':'Atualizando...'):label}</button>})}</div>}
-      {actionError?.orderId===o._id&&<p role="alert" className="mt-3 rounded-xl bg-danger/10 p-3 font-bold text-danger">{actionError.message}</p>}
-      {o.rejectionReason&&<p className="mt-3 rounded-xl bg-danger/10 p-3 text-danger">Motivo: {o.rejectionReason}</p>}
-    </article>)}
-    {!orders.length&&<p className="rounded-2xl border border-dashed bg-surface p-8 text-center text-stone-500">Nenhum pedido encontrado.</p>}
-    {reject&&<RejectModal close={()=>{if(!updatingOrderId)setReject(undefined)}} error={actionError?.orderId===reject._id?actionError.message:undefined} submit={reason=>handleStatusChange(reject,'REJECTED',reason)}/>}
-  </div>
+function MerchantOrders({restaurantId}:{restaurantId:string}) {
+  const {request}=useDashboard();const router=useRouter();const search=useSearchParams();
+  const requested=search.get('status');const urlGroup=(requested&&requested in groups?requested:undefined) as Group|undefined;
+  const [active,setActive]=useState<Group>(urlGroup||'pending');
+  const [tabs,setTabs]=useState<Record<Group,TabState>>({pending:blankTab(),'in-progress':blankTab(),completed:blankTab(),cancelled:blankTab()});
+  const [counts,setCounts]=useState<Counts>({pending:0,inProgress:0,completed:0,cancelled:0});
+  const [loading,setLoading]=useState(true);const [loadingMore,setLoadingMore]=useState(false);const [error,setError]=useState('');
+  const [actionError,setActionError]=useState<{orderId:string;message:string}>();const [success,setSuccess]=useState('');const [reject,setReject]=useState<Order>();const [updatingOrderId,setUpdatingOrderId]=useState<string>();const [updatingStatus,setUpdatingStatus]=useState<string>();
+  const tabsRef=useRef(tabs);useEffect(()=>{tabsRef.current=tabs},[tabs]);
+  const fetchPage=useCallback(async(group:Group,page:number,append=false,quiet=false)=>{quiet||page>1?setLoadingMore(page>1):setLoading(true);try{const result=await request<PageResponse>(`/restaurants/${restaurantId}/orders?group=${groups[group].api}&page=${page}&limit=10`);setCounts(result.counts);setTabs(current=>({...current,[group]:{items:dedupeSort(append||quiet?[...result.items,...current[group].items]:result.items),page:quiet?Math.max(current[group].page,result.page):result.page,hasMore:quiet?current[group].hasMore||result.hasMore:result.hasMore,loaded:true}}));setError('');return result}catch(e){setError(e instanceof Error?e.message:'Não foi possível carregar os pedidos.')}finally{setLoading(false);setLoadingMore(false)}},[request,restaurantId]);
+  useEffect(()=>{let cancelled=false;(async()=>{const result=await fetchPage(active,1);if(cancelled||urlGroup||!result)return;const preferred:Group=result.counts.pending?'pending':result.counts.inProgress?'in-progress':'completed';if(preferred!==active){setActive(preferred);router.replace(`/empresa/pedidos?status=${preferred}`,{scroll:false})}})();return()=>{cancelled=true}},[restaurantId]); // initial tenant load only
+  useEffect(()=>{if(urlGroup&&urlGroup!==active){setActive(urlGroup);if(!tabsRef.current[urlGroup].loaded)void fetchPage(urlGroup,1)}},[urlGroup]);
+  const select=(group:Group)=>{setActive(group);router.replace(`/empresa/pedidos?status=${group}`,{scroll:false});if(!tabsRef.current[group].loaded)void fetchPage(group,1)};
+  const applyOrder=useCallback((updated:Order,previousStatus?:string)=>{const destination=groupFor(updated.status);const previous=previousStatus?groupFor(previousStatus):undefined;setTabs(current=>{const next={...current} as Record<Group,TabState>;for(const key of Object.keys(groups) as Group[])next[key]={...current[key],items:current[key].items.filter(item=>item._id!==updated._id)};if(destination&&next[destination].loaded)next[destination]={...next[destination],items:dedupeSort([updated,...next[destination].items])};return next});if(previous&&destination&&previous!==destination)setCounts(current=>({...current,[previous==='in-progress'?'inProgress':previous]:Math.max(0,countFor(current,previous)-1),[destination==='in-progress'?'inProgress':destination]:countFor(current,destination)+1}));},[]);
+  useOrderSocket(useCallback((_event,value)=>{const updated=value as Order;if(!updated?._id)return;const known=(Object.values(tabsRef.current).flatMap(tab=>tab.items).find(item=>item._id===updated._id));applyOrder(updated,known?.status);void fetchPage(active,1,false,true)},[active,applyOrder,fetchPage]));
+  useEffect(()=>{const timer=setInterval(()=>void fetchPage(active,1,false,true),30000);return()=>clearInterval(timer)},[active,fetchPage]);
+  async function change(order:Order,status:string,reason?:string){if(updatingOrderId)return;setUpdatingOrderId(order._id);setUpdatingStatus(status);setActionError(undefined);try{const updated=await request<Order>(`/restaurants/${restaurantId}/orders/${order._id}/status`,{method:'PATCH',body:JSON.stringify({status,...(reason?{reason}:{})})});applyOrder(updated,order.status);setReject(undefined);setSuccess(status==='ACCEPTED'?'Pedido aceito.':status==='REJECTED'?'Pedido recusado.':'Status do pedido atualizado.');window.dispatchEvent(new CustomEvent('menu-flow:orders-updated'))}catch(e){setActionError({orderId:order._id,message:actionErrorMessage(e)});throw e}finally{setUpdatingOrderId(undefined);setUpdatingStatus(undefined)}}
+  const tab=tabs[active];return <div className="mt-5">
+    <div role="tablist" aria-label="Grupos de pedidos" className="grid grid-cols-2 gap-2 lg:grid-cols-4">{(Object.keys(groups) as Group[]).map(key=>{const selected=active===key;const count=countFor(counts,key);return <button role="tab" aria-selected={selected} key={key} onClick={()=>select(key)} className={`flex min-w-0 items-center justify-between gap-2 whitespace-nowrap rounded-xl border px-3 py-3 text-sm font-black transition ${selected?'border-ink bg-ink text-white':'border-stone-200 bg-surface hover:border-accent'} ${key==='pending'&&count&&!selected?'border-accent':''}`}><span>{groups[key].label}</span><span className={`rounded-full px-2 py-0.5 text-xs ${key==='pending'&&count?'bg-accent text-white':selected?'bg-white/20':'bg-background'}`}>{count}</span></button>})}</div>
+    {success&&<p role="status" className="mt-4 rounded-xl bg-success/10 p-3 font-bold text-success">{success}</p>}{error&&<p role="alert" className="mt-4 rounded-xl bg-danger/10 p-4 font-bold text-danger">{error}</p>}
+    {loading&&!tab.loaded?<p className="mt-4 rounded-xl bg-surface p-5">Carregando pedidos...</p>:<div className="mt-4 grid gap-4 xl:grid-cols-2">{tab.items.map(order=><OrderCard key={order._id} order={order} updatingOrderId={updatingOrderId} updatingStatus={updatingStatus} actionError={actionError} onReject={setReject} onChange={change}/>)}{!tab.items.length&&<p className="rounded-2xl border border-dashed bg-surface p-8 text-center text-stone-500 xl:col-span-2">{groups[active].empty}</p>}</div>}
+    {tab.hasMore&&<div className="mt-5 text-center"><button disabled={loadingMore} onClick={()=>void fetchPage(active,tab.page+1,true)} className="rounded-xl border border-ink bg-surface px-6 py-3 font-black text-ink disabled:opacity-50">{loadingMore?'Carregando...':'Mostrar mais'}</button></div>}
+    {reject&&<RejectModal close={()=>setReject(undefined)} error={actionError?.orderId===reject._id?actionError.message:undefined} submit={reason=>change(reject,'REJECTED',reason)}/>}</div>;
 }
+
+function statusClass(status:string){if(['COMPLETED','READY'].includes(status))return'bg-success/10 text-success';if(['REJECTED','CANCELLED'].includes(status))return'bg-danger/10 text-danger';if(['PENDING','PREPARING'].includes(status))return'bg-accent/15 text-accent';return'bg-background text-ink'}
+function OrderCard({order:o,updatingOrderId,updatingStatus,actionError,onReject,onChange}:{order:Order;updatingOrderId?:string;updatingStatus?:string;actionError?:{orderId:string;message:string};onReject:(o:Order)=>void;onChange:(o:Order,s:string,r?:string)=>Promise<void>}){return <article className={`min-w-0 rounded-2xl border bg-surface p-5 shadow-sm ${o.status==='PENDING'?'border-accent ring-2 ring-accent/20':''}`}><header className="flex flex-wrap justify-between gap-2"><div><strong className="text-lg">#{o.orderNumber||o._id.slice(-6)}</strong><p className="text-sm text-stone-500">{o.customerName} • {new Date(o.createdAt).toLocaleString('pt-BR')}</p></div><span className={`h-fit rounded-full px-3 py-2 text-xs font-black ${statusClass(o.status)}`}>{o.status==='READY'&&o.fulfillment==='PICKUP'?'Pronto para retirada':orderStatus[o.status]||o.status}</span></header><div className="mt-4 space-y-3 border-y py-4">{o.items?.map((item,i)=><div key={i}><b>{item.quantity}x {item.productName}</b>{item.addons?.length>0&&<p className="text-sm text-stone-500">+ {item.addons.map(a=>a.name).join(', ')}</p>}{item.observation&&<p className="text-sm">Obs.: {item.observation}</p>}</div>)}</div><div className="mt-4 text-sm"><p><b>{o.fulfillment==='DELIVERY'?'ENTREGA':'RETIRADA'}</b></p>{o.address&&<div className="mt-2"><p>{o.address.street}, {o.address.number}</p><p>{o.address.neighborhood}</p><p>{o.address.city} - {o.address.state} · CEP {o.address.zipCode}</p>{o.address.complement&&<p>Complemento: {o.address.complement}</p>}{o.address.reference&&<p>Referência: {o.address.reference}</p>}</div>}<p className="mt-2">Pagamento: <b>{paymentMethodLabel(o.paymentMethod)}</b></p>{o.paymentMethod==='CASH'&&<p>Troco: <b>{o.needsChange?`para ${money(o.changeForCents||0)} · estimado ${money(o.expectedChangeCents||0)}`:'não precisa'}</b></p>}</div><div className="mt-4 space-y-1 text-sm"><p className="flex justify-between"><span>Subtotal</span><b>{money(o.subtotalCents??0)}</b></p><p className="flex justify-between"><span>Taxa de entrega</span><b>{money(o.deliveryFeeCents??0)}</b></p><p className="flex justify-between"><span>Taxa de serviço Menu Flow</span><b>{money(o.customerServiceFeeCents??0)}</b></p><p className="flex justify-between text-lg font-black"><span>Total pago pelo cliente</span><span>{money(o.totalCents??Math.round(o.total*100))}</span></p></div>{!['COMPLETED','REJECTED','CANCELLED'].includes(o.status)&&<div className="mt-4 flex flex-wrap justify-end gap-2">{(actions[o.status]||[]).filter(([s])=>!(o.fulfillment==='PICKUP'&&s==='OUT_FOR_DELIVERY')).map(([status,label])=><button key={status} disabled={Boolean(updatingOrderId)} onClick={()=>status==='REJECTED'?onReject(o):void onChange(o,status).catch(()=>undefined)} className={`rounded-xl px-4 py-3 font-bold disabled:opacity-50 ${status==='REJECTED'?'border text-danger':'bg-ink text-white'}`}>{updatingOrderId===o._id&&updatingStatus===status?'Atualizando...':label}</button>)}</div>}{actionError?.orderId===o._id&&<p role="alert" className="mt-3 rounded-xl bg-danger/10 p-3 font-bold text-danger">{actionError.message}</p>}{(o.rejectionReason||o.cancellationReason)&&<p className="mt-3 rounded-xl bg-danger/10 p-3 text-danger">Motivo: {o.rejectionReason||o.cancellationReason}</p>}</article>}
+
+function LegacyOrders({customer=false,employee=false}:{customer?:boolean;employee?:boolean;restaurantId?:string}){const {request}=useDashboard();const [orders,setOrders]=useState<Order[]>([]);const [loading,setLoading]=useState(true);const path=customer?'/customer/orders':'/employee/orders';const load=useCallback(async()=>{setOrders(await request<Order[]>(path));setLoading(false)},[path,request]);useEffect(()=>{void load()},[load]);useOrderSocket(useCallback(()=>{void load()},[load]));if(loading)return <p className="mt-5">Carregando pedidos...</p>;return <div className="mt-5 grid gap-4 xl:grid-cols-2">{orders.map(o=><article key={o._id} className="rounded-2xl bg-surface p-5"><b>#{o.orderNumber}</b><p>{orderStatus[o.status]}</p>{customer&&<Link href={`/acompanhar/${o.orderNumber}?token=${encodeURIComponent(o.publicToken||'')}`} className="mt-3 inline-block font-bold text-accent">Acompanhar pedido</Link>}</article>)}</div>}
 
 function RejectModal({close,submit,error}:{close:()=>void;submit:(reason:string)=>Promise<void>;error?:string}) {
   const [quick,setQuick]=useState('');const [detail,setDetail]=useState('');const [busy,setBusy]=useState(false);const reason=quick==='Outro'?detail.trim():[quick,detail.trim()].filter(Boolean).join(' — ');
