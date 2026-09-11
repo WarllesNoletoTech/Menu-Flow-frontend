@@ -396,7 +396,7 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
   const [notice, setNotice] = useState<NoticeState>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
-  const [status, setStatus] = useState<'all' | 'available' | 'unavailable'>('all');
+  const [status, setStatus] = useState<'all' | 'available' | 'unavailable'>('available');
   const [featured, setFeatured] = useState(false);
 
   useEffect(() => {
@@ -560,20 +560,41 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
     }
   }
 
+  function movableSiblings(product: Product) {
+    return products
+      .filter((item) => categoryId(item) === categoryId(product) && item.available === product.available)
+      .sort(compareProducts);
+  }
+
+  function canMoveProduct(product: Product, delta: number) {
+    const siblings = movableSiblings(product);
+    const index = siblings.findIndex((item) => item._id === product._id);
+    return index >= 0 && index + delta >= 0 && index + delta < siblings.length;
+  }
+
   async function moveProduct(product: Product, delta: number) {
     const productCategoryId = categoryId(product);
-    const siblings = products.filter((item) => categoryId(item) === productCategoryId).sort(compareProducts);
-    const index = siblings.findIndex((item) => item._id === product._id);
-    const other = index + delta;
-    if (other < 0 || other >= siblings.length) return;
+    const allSiblings = products.filter((item) => categoryId(item) === productCategoryId).sort(compareProducts);
+    const movable = allSiblings.filter((item) => item.available === product.available);
+    const movableIndex = movable.findIndex((item) => item._id === product._id);
+    const target = movable[movableIndex + delta];
+    if (!target) return;
+
+    const currentIndex = allSiblings.findIndex((item) => item._id === product._id);
+    const targetIndex = allSiblings.findIndex((item) => item._id === target._id);
+    if (currentIndex < 0 || targetIndex < 0) return;
+
     const before = [...products];
-    const reorderedSiblings = [...siblings];
-    [reorderedSiblings[index], reorderedSiblings[other]] = [reorderedSiblings[other], reorderedSiblings[index]];
+    const reorderedSiblings = [...allSiblings];
+    [reorderedSiblings[currentIndex], reorderedSiblings[targetIndex]] = [reorderedSiblings[targetIndex], reorderedSiblings[currentIndex]];
     const reordered = reorderedSiblings.map((item, order) => ({ ...item, order }));
     setProducts((current) => current.map((item) => reordered.find((entry) => entry._id === item._id) ?? item));
     setBusyId(`reorder:${productCategoryId}`);
     try {
-      await request(`${base}/products/reorder`, { method: 'PATCH', body: JSON.stringify(reordered.map((item) => ({ id: item._id, order: item.order }))) });
+      await request(`${base}/products/reorder`, {
+        method: 'PATCH',
+        body: JSON.stringify(reordered.map((item) => ({ id: item._id, order: item.order }))),
+      });
       invalidateLoads();
       await refresh();
       setNotice({ text: 'Ordem dos produtos atualizada.', kind: 'success' });
@@ -585,15 +606,15 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
     }
   }
 
-  async function archive(product: Product) {
-    if (!window.confirm(`Arquivar o produto “${product.name}”?`)) return;
+  async function removeProduct(product: Product) {
+    if (!window.confirm(`Excluir permanentemente o produto “${product.name}”? Esta ação não pode ser desfeita.`)) return;
     setBusyId(product._id);
     try {
-      await request(`${base}/products/${product._id}/archive`, { method: 'PATCH' });
+      await request(`${base}/products/${product._id}`, { method: 'DELETE' });
       invalidateLoads();
       setProducts((current) => current.filter((entry) => entry._id !== product._id));
       await refresh();
-      setNotice({ text: 'Produto arquivado com segurança.', kind: 'success' });
+      setNotice({ text: 'Produto excluído do cardápio.', kind: 'success' });
     } catch (error) {
       setNotice({ text: msg(error), kind: 'error' });
     } finally {
@@ -612,9 +633,9 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
           ))}
         </select>
         <select className="field !mt-0" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+          <option value="available">Ativos no cardápio</option>
+          <option value="unavailable">Desativados</option>
           <option value="all">Todos</option>
-          <option value="available">Disponíveis</option>
-          <option value="unavailable">Indisponíveis</option>
         </select>
         <label className="flex min-h-11 items-center gap-2 rounded-xl px-2 font-bold">
           <input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} /> Destaques
@@ -624,9 +645,10 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
         <CatalogStat label="Produtos" value={catalogStats.total} />
-        <CatalogStat label="Disponíveis" value={catalogStats.available} />
+        <CatalogStat label="Ativos" value={catalogStats.available} />
+        <CatalogStat label="Desativados" value={catalogStats.total - catalogStats.available} />
         <CatalogStat label="Em destaque" value={catalogStats.featured} accent />
         <CatalogStat label="Em promoção" value={catalogStats.promotions} danger />
       </div>
@@ -654,7 +676,7 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
                 <span className="text-sm font-bold text-stone-500">{categoryProducts.length} {categoryProducts.length === 1 ? 'produto' : 'produtos'}</span>
               </header>
               <div className="grid gap-4 lg:grid-cols-2">
-          {categoryProducts.map((product, productIndex) => (
+          {categoryProducts.map((product) => (
             <article key={product._id} className={`relative flex gap-4 overflow-hidden rounded-2xl border bg-surface p-4 shadow-sm transition hover:shadow-soft ${product.featured ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border'}`}>
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt={product.name} className="h-24 w-24 shrink-0 rounded-xl object-cover" />
@@ -692,11 +714,11 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
                   >
                     {product.featured ? 'Remover destaque' : 'Destacar'}
                   </button>
-                  <button type="button" disabled={busyId !== null} onClick={() => void archive(product)} className="rounded-lg border px-3 py-2 text-sm font-bold text-danger disabled:opacity-50">
-                    Arquivar
+                  <button type="button" disabled={busyId !== null} onClick={() => void removeProduct(product)} className="rounded-lg border px-3 py-2 text-sm font-bold text-danger disabled:opacity-50">
+                    Excluir
                   </button>
-                  <button type="button" aria-label={`Mover ${product.name} para cima`} disabled={busyId !== null || productIndex === 0} onClick={() => void moveProduct(product, -1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↑</button>
-                  <button type="button" aria-label={`Mover ${product.name} para baixo`} disabled={busyId !== null || productIndex === categoryProducts.length - 1} onClick={() => void moveProduct(product, 1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↓</button>
+                  <button type="button" title="Mover para cima" aria-label={`Mover ${product.name} para cima`} disabled={busyId !== null || !canMoveProduct(product, -1)} onClick={() => void moveProduct(product, -1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↑</button>
+                  <button type="button" title="Mover para baixo" aria-label={`Mover ${product.name} para baixo`} disabled={busyId !== null || !canMoveProduct(product, 1)} onClick={() => void moveProduct(product, 1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↓</button>
                 </div>
               </div>
             </article>
