@@ -419,6 +419,13 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
     [products, search, category, status, featured],
   );
 
+  const productGroups = useMemo(() => sortByOrder(categories).flatMap((categoryItem) => {
+    const categoryProducts = shown
+      .filter((product) => categoryId(product) === categoryItem._id)
+      .sort(compareProducts);
+    return categoryProducts.length ? [{ category: categoryItem, products: categoryProducts }] : [];
+  }), [categories, shown]);
+
   const catalogStats = useMemo(() => ({
     total: products.length,
     available: products.filter((product) => product.available).length,
@@ -554,15 +561,17 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
   }
 
   async function moveProduct(product: Product, delta: number) {
-    const siblings = products.filter((item) => categoryId(item) === categoryId(product));
+    const productCategoryId = categoryId(product);
+    const siblings = products.filter((item) => categoryId(item) === productCategoryId).sort(compareProducts);
     const index = siblings.findIndex((item) => item._id === product._id);
     const other = index + delta;
     if (other < 0 || other >= siblings.length) return;
-    const before = products;
-    [siblings[index], siblings[other]] = [siblings[other], siblings[index]];
-    const reordered = siblings.map((item, order) => ({ ...item, order }));
+    const before = [...products];
+    const reorderedSiblings = [...siblings];
+    [reorderedSiblings[index], reorderedSiblings[other]] = [reorderedSiblings[other], reorderedSiblings[index]];
+    const reordered = reorderedSiblings.map((item, order) => ({ ...item, order }));
     setProducts((current) => current.map((item) => reordered.find((entry) => entry._id === item._id) ?? item));
-    setBusyId('reorder');
+    setBusyId(`reorder:${productCategoryId}`);
     try {
       await request(`${base}/products/reorder`, { method: 'PATCH', body: JSON.stringify(reordered.map((item) => ({ id: item._id, order: item.order }))) });
       invalidateLoads();
@@ -637,13 +646,20 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
       ) : !shown.length ? (
         <Empty text="Nenhum produto corresponde aos filtros atuais." />
       ) : (
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          {shown.map((product) => (
+        <div className="mt-5 space-y-7">
+          {productGroups.map(({ category: categoryItem, products: categoryProducts }) => (
+            <section key={categoryItem._id} aria-labelledby={`product-category-${categoryItem._id}`}>
+              <header className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-accent/20 pb-2">
+                <div><h2 id={`product-category-${categoryItem._id}`} className="text-lg font-black text-ink">{categoryItem.name}</h2><p className="text-xs font-semibold text-stone-500">{categoryProducts.filter((product) => product.available).length} disponíveis · {categoryProducts.filter((product) => product.featured).length} em destaque</p></div>
+                <span className="text-sm font-bold text-stone-500">{categoryProducts.length} {categoryProducts.length === 1 ? 'produto' : 'produtos'}</span>
+              </header>
+              <div className="grid gap-4 lg:grid-cols-2">
+          {categoryProducts.map((product, productIndex) => (
             <article key={product._id} className={`relative flex gap-4 overflow-hidden rounded-2xl border bg-surface p-4 shadow-sm transition hover:shadow-soft ${product.featured ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border'}`}>
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt={product.name} className="h-24 w-24 shrink-0 rounded-xl object-cover" />
               ) : (
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-background text-2xl" aria-hidden="true">🍽</div>
+                <div className="flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed bg-background text-stone-500"><span className="text-2xl" aria-hidden="true">🍽</span><span className="mt-1 text-[10px] font-bold">Sem imagem</span></div>
               )}
               <div className="min-w-0 flex-1">
                 {product.featured && <span className="mb-2 inline-flex rounded-full bg-accent px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">★ Destaque</span>}
@@ -679,11 +695,14 @@ export function ProductsManager({ onCreateCategory }: { onCreateCategory: () => 
                   <button type="button" disabled={busyId !== null} onClick={() => void archive(product)} className="rounded-lg border px-3 py-2 text-sm font-bold text-danger disabled:opacity-50">
                     Arquivar
                   </button>
-                  <button type="button" aria-label={`Mover ${product.name} para cima`} disabled={busyId !== null || products.filter((item) => categoryId(item) === categoryId(product)).findIndex((item) => item._id === product._id) === 0} onClick={() => void moveProduct(product, -1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↑</button>
-                  <button type="button" aria-label={`Mover ${product.name} para baixo`} disabled={busyId !== null || products.filter((item) => categoryId(item) === categoryId(product)).findIndex((item) => item._id === product._id) === products.filter((item) => categoryId(item) === categoryId(product)).length - 1} onClick={() => void moveProduct(product, 1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↓</button>
+                  <button type="button" aria-label={`Mover ${product.name} para cima`} disabled={busyId !== null || productIndex === 0} onClick={() => void moveProduct(product, -1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↑</button>
+                  <button type="button" aria-label={`Mover ${product.name} para baixo`} disabled={busyId !== null || productIndex === categoryProducts.length - 1} onClick={() => void moveProduct(product, 1)} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-30">↓</button>
                 </div>
               </div>
             </article>
+          ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -875,7 +894,11 @@ function assertEntity(value: unknown, label: string): asserts value is { _id: st
 }
 
 function sortByOrder<T extends { order: number }>(items: T[]) {
-  return [...items].sort((a, b) => a.order - b.order);
+  return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || ('_id' in a && '_id' in b ? String(a._id).localeCompare(String(b._id)) : 0));
+}
+
+function compareProducts(a: Product, b: Product) {
+  return (a.order ?? 0) - (b.order ?? 0) || a._id.localeCompare(b._id);
 }
 
 function validateAddonGroups(groups: Group[]) {
