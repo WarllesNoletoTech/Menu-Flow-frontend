@@ -236,23 +236,56 @@ function SmartCatalogBuilder({ onGoProducts }: { onGoProducts: () => void }) {
       if (!inputKeys.has(key)) { inputKeys.add(key); uniqueRows.push(row); }
     }
     const existingCategoryByName = new Map(categories.map((item) => [normalize(item.name), item]));
-    const existingProductKeys = new Set(products.map((product) => {
+    const existingProductByKey = new Map<string, Product>();
+    for (const product of products) {
       const category = categories.find((item) => item._id === categoryId(product));
-      return `${normalize(category?.name ?? '')}::${normalize(product.name)}`;
-    }));
-    const rowsToCreate = uniqueRows.filter((row) => !existingProductKeys.has(`${normalize(row.category)}::${normalize(row.name)}`));
-    const skipped = uniqueRows.length - rowsToCreate.length;
-    if (!rowsToCreate.length) {
-      setNotice({ text: 'Todos os produtos da importação já existem nas mesmas categorias. Nada foi alterado.', kind: 'info' });
+      existingProductByKey.set(`${normalize(category?.name ?? '')}::${normalize(product.name)}`, product);
+    }
+
+    const groupsForRow = (row: CatalogImportRow) => {
+      const preset = findProductPreset(row.presetId);
+      return (row.addonGroups ?? preset?.groups ?? []).map((group) => ({
+        name: group.name,
+        required: group.required,
+        min: group.min,
+        max: group.max,
+        pricingMode: group.pricingMode ?? 'SUM' as const,
+        addons: group.addons.map((addon) => ({ name: addon.name, price: addon.price })),
+      }));
+    };
+
+    type ImportOperation =
+      | { kind: 'create'; row: CatalogImportRow; addonGroups: ReturnType<typeof groupsForRow> }
+      | { kind: 'repair'; row: CatalogImportRow; addonGroups: ReturnType<typeof groupsForRow>; existing: Product };
+    const operations: ImportOperation[] = [];
+    for (const row of uniqueRows) {
+      const key = `${normalize(row.category)}::${normalize(row.name)}`;
+      const existing = existingProductByKey.get(key);
+      const addonGroups = groupsForRow(row);
+      if (!existing) {
+        operations.push({ kind: 'create', row, addonGroups });
+        continue;
+      }
+      // Safe repair path: an earlier import may have created the product but lost its options.
+      // In that case re-importing the same CSV restores only the missing option groups and
+      // preserves the existing product price, description, image and availability.
+      if (addonGroups.length && !(existing.addonGroups?.length)) operations.push({ kind: 'repair', row, addonGroups, existing });
+    }
+    const createdCount = operations.filter((item) => item.kind === 'create').length;
+    const repairedCount = operations.filter((item) => item.kind === 'repair').length;
+    const skipped = uniqueRows.length - operations.length;
+    if (!operations.length) {
+      setNotice({ text: 'Todos os produtos já existem e os grupos de opções já estão configurados. Nada foi alterado.', kind: 'info' });
       return;
     }
-    if (!window.confirm(`Importar ${rowsToCreate.length} produto(s)${skipped ? ` e ignorar ${skipped} duplicado(s)` : ''}? Produtos existentes não serão sobrescritos.`)) return;
+    const actionSummary = [createdCount ? `${createdCount} novo(s)` : '', repairedCount ? `${repairedCount} existente(s) com opções ausentes serão corrigidos` : ''].filter(Boolean).join(' e ');
+    if (!window.confirm(`Processar ${actionSummary}${skipped ? `; ${skipped} item(ns) já completos serão preservados` : ''}?`)) return;
 
     setBusy('import');
-    setProgress({ done: 0, total: rowsToCreate.length });
+    setProgress({ done: 0, total: operations.length });
     setNotice(null);
     try {
-      const categoriesNeeded = [...new Set(rowsToCreate.map((row) => row.category))];
+      const categoriesNeeded = [...new Set(operations.filter((item) => item.kind === 'create').map((item) => item.row.category))];
       let nextOrder = categories.length;
       for (const categoryName of categoriesNeeded) {
         const key = normalize(categoryName);
@@ -266,36 +299,42 @@ function SmartCatalogBuilder({ onGoProducts }: { onGoProducts: () => void }) {
       }
 
       let done = 0;
-      for (const row of rowsToCreate) {
-        const category = existingCategoryByName.get(normalize(row.category));
-        if (!category) throw new Error(`Não foi possível localizar a categoria “${row.category}”.`);
-        const preset = findProductPreset(row.presetId);
-        await request<Product>(`${base}/products`, {
-          method: 'POST',
-          body: JSON.stringify({
-            categoryId: category._id,
-            name: row.name,
-            price: row.price,
-            ...(row.promotionalPrice !== undefined ? { promotionalPrice: row.promotionalPrice } : {}),
-            ...(row.description ? { description: row.description } : {}),
-            available: row.available,
-            featured: row.featured,
-            addonGroups: (preset?.groups ?? []).map((group) => ({
-              name: group.name,
-              required: group.required,
-              min: group.min,
-              max: group.max,
-              pricingMode: group.pricingMode ?? 'SUM',
-              addons: group.addons.map((addon) => ({ name: addon.name, price: addon.price })),
-            })),
-          }),
-        });
+      for (const operation of operations) {
+        const { row, addonGroups } = operation;
+        let saved: Product;
+        if (operation.kind === 'repair') {
+          saved = await request<Product>(`${base}/products/${operation.existing._id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ addonGroups }),
+          });
+        } else {
+          const category = existingCategoryByName.get(normalize(row.category));
+          if (!category) throw new Error(`Não foi possível localizar a categoria “${row.category}”.`);
+          saved = await request<Product>(`${base}/products`, {
+            method: 'POST',
+            body: JSON.stringify({
+              categoryId: category._id,
+              name: row.name,
+              price: row.price,
+              ...(row.promotionalPrice !== undefined ? { promotionalPrice: row.promotionalPrice } : {}),
+              ...(row.description ? { description: row.description } : {}),
+              available: row.available,
+              featured: row.featured,
+              addonGroups,
+            }),
+          });
+        }
+        assertEntity(saved, 'produto');
+        if (addonGroups.length && (saved.addonGroups?.length ?? 0) !== addonGroups.length) {
+          throw new Error(`O produto “${row.name}” foi salvo sem todos os grupos de opções. Atualize também o backend do Menu Flow e tente importar novamente.`);
+        }
         done += 1;
-        setProgress({ done, total: rowsToCreate.length });
+        setProgress({ done, total: operations.length });
       }
       invalidateLoads();
       await refresh();
-      setNotice({ text: `${rowsToCreate.length} produto(s) importado(s) com sucesso${skipped ? `; ${skipped} duplicado(s) foram preservados sem alteração` : ''}.`, kind: 'success' });
+      const resultSummary = [createdCount ? `${createdCount} criado(s)` : '', repairedCount ? `${repairedCount} corrigido(s)` : '', skipped ? `${skipped} preservado(s)` : ''].filter(Boolean).join(', ');
+      setNotice({ text: `Importação concluída: ${resultSummary}.`, kind: 'success' });
     } catch (error) {
       invalidateLoads();
       await refresh().catch(() => undefined);
@@ -350,12 +389,12 @@ function SmartCatalogBuilder({ onGoProducts }: { onGoProducts: () => void }) {
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
           <div>
             <label className="text-sm font-black">Conteúdo do cardápio</label>
-            <textarea rows={13} className="field resize-y font-mono text-sm" placeholder={'Exemplo simples:\nPizzas:\nPizza Calabresa - 45,00\nPizza Portuguesa - 50,00\n\nOu use a planilha CSV para importar descrição, promoção e modelo de opções.'} value={importText} onChange={(event) => setImportText(event.target.value)} />
+            <textarea rows={13} className="field resize-y font-mono text-sm" placeholder={'Exemplo simples:\nPizzas:\nPizza Calabresa - 45,00\nPizza Portuguesa - 50,00\n\nOu use a planilha CSV para importar descrição, promoção, modelo e grupos de opções personalizados.'} value={importText} onChange={(event) => setImportText(event.target.value)} />
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-500"><span className="rounded-full bg-background px-2.5 py-1">CSV com até 500 produtos</span><span className="rounded-full bg-background px-2.5 py-1">Duplicados são ignorados</span><span className="rounded-full bg-background px-2.5 py-1">Revisão antes de salvar</span></div>
           </div>
           <div className="rounded-2xl border bg-background/50 p-4">
             <div className="flex items-center justify-between gap-3"><h4 className="font-black">Prévia da importação</h4><span className="rounded-full bg-surface px-2.5 py-1 text-xs font-black">{parsed.rows.length} produto(s)</span></div>
-            {parsed.rows.length ? <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">{parsed.rows.slice(0, 20).map((row) => <div key={`${row.line}-${row.category}-${row.name}`} className="rounded-xl border bg-surface p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-bold">{row.name}</p><p className="truncate text-xs text-stone-500">{row.category}{row.presetId ? ` · ${findProductPreset(row.presetId)?.label}` : ''}</p></div><b className="shrink-0 text-sm">{money(row.promotionalPrice ?? row.price)}</b></div></div>)}{parsed.rows.length > 20 && <p className="text-center text-xs font-bold text-stone-500">+ {parsed.rows.length - 20} produtos na importação</p>}</div> : <p className="mt-4 text-sm text-stone-500">Cole ou selecione um arquivo para visualizar os itens antes de importar.</p>}
+            {parsed.rows.length ? <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">{parsed.rows.slice(0, 20).map((row) => <div key={`${row.line}-${row.category}-${row.name}`} className="rounded-xl border bg-surface p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-bold">{row.name}</p><p className="truncate text-xs text-stone-500">{row.category}{row.presetId ? ` · ${findProductPreset(row.presetId)?.label}` : ''}{row.addonGroups?.length ? ` · ${row.addonGroups.length} grupo(s) de opções` : ''}</p></div><b className="shrink-0 text-sm">{money(row.promotionalPrice ?? row.price)}</b></div></div>)}{parsed.rows.length > 20 && <p className="text-center text-xs font-bold text-stone-500">+ {parsed.rows.length - 20} produtos na importação</p>}</div> : <p className="mt-4 text-sm text-stone-500">Cole ou selecione um arquivo para visualizar os itens antes de importar.</p>}
             {parsed.errors.length > 0 && <div className="mt-4 rounded-xl border border-danger/20 bg-danger/10 p-3"><p className="text-sm font-black text-danger">Atenção na leitura</p><ul className="mt-2 max-h-28 list-disc space-y-1 overflow-y-auto pl-5 text-xs text-danger">{parsed.errors.slice(0, 12).map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul></div>}
             {busy === 'import' && <div className="mt-4"><div className="flex justify-between text-xs font-bold"><span>Importando…</span><span>{progress.done}/{progress.total}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-200"><div className="h-full bg-ink transition-all" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} /></div></div>}
             <button type="button" disabled={busy !== null || !parsed.rows.length} onClick={() => void importCatalog()} className="mt-4 min-h-12 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">{busy === 'import' ? 'Importando cardápio…' : 'Revisado, importar cardápio'}</button>
@@ -1171,7 +1210,6 @@ function compareProducts(a: Product, b: Product) {
 
 function validateAddonGroups(groups: Group[]) {
   const groupNames = new Set<string>();
-  const addonNames = new Set<string>();
   for (const group of groups) {
     const groupName = group.name.trim();
     if (!groupName) return 'Informe o nome de todos os grupos de adicionais.';
@@ -1187,11 +1225,12 @@ function validateAddonGroups(groups: Group[]) {
     if (group.required && min < 1) return `O grupo obrigatório “${groupName}” precisa exigir pelo menos uma opção.`;
     if (!group.addons.length) return `Adicione pelo menos uma opção ao grupo “${groupName}”.`;
 
+    const addonNames = new Set<string>();
     for (const addon of group.addons) {
       const addonName = addon.name.trim();
       if (!addonName) return `Informe o nome de todas as opções do grupo “${groupName}”.`;
       const normalizedAddon = addonName.toLocaleLowerCase('pt-BR');
-      if (addonNames.has(normalizedAddon)) return `A opção “${addonName}” está duplicada neste produto.`;
+      if (addonNames.has(normalizedAddon)) return `A opção “${addonName}” está duplicada no grupo “${groupName}”.`;
       addonNames.add(normalizedAddon);
       const addonPrice = Number(addon.price);
       if (!Number.isFinite(addonPrice) || addonPrice < 0) return `Informe um preço válido para a opção “${addonName}”.`;

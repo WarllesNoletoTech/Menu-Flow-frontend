@@ -30,6 +30,7 @@ export type CatalogImportRow = {
   presetId?: string;
   available: boolean;
   featured: boolean;
+  addonGroups?: PresetGroup[];
 };
 
 export type CatalogImportResult = { rows: CatalogImportRow[]; errors: string[] };
@@ -122,10 +123,10 @@ export function findProductPreset(id?: string) {
 
 export function catalogImportExample() {
   return [
-    'Categoria;Produto;Descrição;Preço;Preço promocional;Modelo de opções;Disponível;Destaque',
-    'Hambúrgueres;X-Bacon;Pão, carne, queijo e bacon;25,00;;hamburguer;sim;sim',
-    'Bebidas;Coca-Cola 350 ml;Lata gelada;6,00;;;sim;não',
-    'Pizzas;Pizza Tradicional;Escolha o tamanho e os sabores;35,00;;pizza;sim;sim',
+    'Categoria;Produto;Descrição;Preço;Preço promocional;Modelo de opções;Disponível;Destaque;Grupos de opções',
+    'Hambúrgueres;X-Bacon;Pão, carne, queijo e bacon;25,00;;hamburguer;sim;sim;',
+    'Bebidas;Coca-Cola 350 ml;Lata gelada;6,00;;;sim;não;',
+    'Pizzas;Pizza Tradicional;Escolha o tamanho e os sabores;35,00;;pizza;sim;sim;',
   ].join('\n');
 }
 
@@ -182,9 +183,10 @@ export function parseCatalogImport(text: string): CatalogImportResult {
     category: ['categoria', 'category'], name: ['produto', 'nome', 'product'], description: ['descricao', 'description'],
     price: ['preco', 'price', 'valor'], promotionalPrice: ['preco_promocional', 'promocional', 'promotion'],
     presetId: ['modelo_de_opcoes', 'modelo', 'preset'], available: ['disponivel', 'ativo', 'available'], featured: ['destaque', 'featured'],
+    addonGroups: ['grupos_de_opcoes', 'grupos_opcoes', 'addon_groups', 'opcoes_json'],
   };
   const indexOf = (key: keyof typeof aliases) => normalizedHeaders.findIndex((header) => aliases[key].includes(header));
-  const indexes = { category: indexOf('category'), name: indexOf('name'), description: indexOf('description'), price: indexOf('price'), promotionalPrice: indexOf('promotionalPrice'), presetId: indexOf('presetId'), available: indexOf('available'), featured: indexOf('featured') };
+  const indexes = { category: indexOf('category'), name: indexOf('name'), description: indexOf('description'), price: indexOf('price'), promotionalPrice: indexOf('promotionalPrice'), presetId: indexOf('presetId'), available: indexOf('available'), featured: indexOf('featured'), addonGroups: indexOf('addonGroups') };
   const errors: string[] = [];
   if (indexes.category < 0 || indexes.name < 0 || indexes.price < 0) errors.push('A planilha precisa ter as colunas Categoria, Produto e Preço.');
   if (errors.length) return { rows: [], errors };
@@ -208,7 +210,35 @@ export function parseCatalogImport(text: string): CatalogImportResult {
     const presetRaw = indexes.presetId >= 0 ? normalizeHeader(clean(cells[indexes.presetId])) : '';
     const presetId = presetRaw ? (presetRaw === 'hamburgueria' ? 'hamburguer' : presetRaw === 'restaurante' ? 'almoco' : presetRaw) : undefined;
     if (presetId && !findProductPreset(presetId)) errors.push(`Linha ${item.line}: modelo de opções “${cells[indexes.presetId]}” não existe; o produto será importado sem modelo.`);
-    rows.push({ line: item.line, category, name, description: indexes.description >= 0 ? clean(cells[indexes.description]) : '', price, promotionalPrice, presetId: presetId && findProductPreset(presetId) ? presetId : undefined, available: indexes.available >= 0 ? boolValue(clean(cells[indexes.available]), true) : true, featured: indexes.featured >= 0 ? boolValue(clean(cells[indexes.featured]), false) : false });
+
+    let addonGroups: PresetGroup[] | undefined;
+    const groupsRaw = indexes.addonGroups >= 0 ? clean(cells[indexes.addonGroups]) : '';
+    if (groupsRaw) {
+      try {
+        const parsedGroups = JSON.parse(groupsRaw);
+        if (!Array.isArray(parsedGroups)) throw new Error('formato inválido');
+        addonGroups = parsedGroups.map((group: any) => {
+          const groupName = clean(String(group?.name ?? ''));
+          const rawAddons = Array.isArray(group?.addons) ? group.addons : [];
+          if (!groupName || !rawAddons.length) throw new Error('grupo sem nome ou sem opções');
+          const min = Math.max(0, Math.trunc(Number(group?.min ?? 0)));
+          const max = Math.max(min, Math.trunc(Number(group?.max ?? rawAddons.length)));
+          const pricingMode = String(group?.pricingMode ?? 'SUM').toUpperCase() === 'MAX' ? 'MAX' : 'SUM';
+          const addons = rawAddons.map((addon: any) => {
+            const addonName = clean(String(addon?.name ?? ''));
+            const addonPrice = typeof addon?.price === 'number' ? addon.price : moneyNumber(String(addon?.price ?? '0'));
+            if (!addonName || !Number.isFinite(addonPrice) || addonPrice < 0) throw new Error('opção inválida');
+            return { name: addonName, price: addonPrice };
+          });
+          return { name: groupName, required: Boolean(group?.required), min, max, pricingMode, addons } as PresetGroup;
+        });
+      } catch {
+        errors.push(`Linha ${item.line}: “Grupos de opções” precisa conter um JSON válido. Esta linha não foi incluída.`);
+        continue;
+      }
+    }
+
+    rows.push({ line: item.line, category, name, description: indexes.description >= 0 ? clean(cells[indexes.description]) : '', price, promotionalPrice, presetId: presetId && findProductPreset(presetId) ? presetId : undefined, available: indexes.available >= 0 ? boolValue(clean(cells[indexes.available]), true) : true, featured: indexes.featured >= 0 ? boolValue(clean(cells[indexes.featured]), false) : false, addonGroups });
   }
   if (nonEmpty.length > 501) errors.push('A importação aceita até 500 produtos por vez. O restante não foi incluído.');
   return { rows, errors };
