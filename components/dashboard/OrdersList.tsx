@@ -138,14 +138,10 @@ function MerchantOrders({restaurantId}:{restaurantId:string}) {
   },[request,restaurantId,range]);
 
   useEffect(()=>{
-    let cancelled=false;
-    (async()=>{
-      const result=await fetchPage(active,1);
-      if(cancelled||urlGroup||!result)return;
-      const preferred:Group=result.counts.pending?'pending':result.counts.inProgress?'in-progress':'completed';
-      if(preferred!==active){setActive(preferred);router.replace(`/empresa/pedidos?status=${preferred}`,{scroll:false});}
-    })();
-    return()=>{cancelled=true};
+    // Ao entrar em Pedidos pelo menu do lojista, a fila "Para aceitar" deve ser
+    // sempre a primeira visão, mesmo quando estiver vazia. Não redirecionamos
+    // automaticamente para Em andamento/Finalizados com base nas contagens.
+    void fetchPage(active,1);
     // Initial tenant load only. Date changes are applied explicitly by the filter button.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[restaurantId]);
