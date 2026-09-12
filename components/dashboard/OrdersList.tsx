@@ -20,7 +20,7 @@ type Order = {
   address?:Record<string,string>;
   items:Array<{productName:string;unitPrice?:number;unitPriceCents?:number;quantity:number;observation?:string;addons:Array<{name:string;groupName?:string;price?:number;priceCents?:number}>}>;
   rappidexSyncRequested?:boolean; rappidexSyncStatus?:string; rappidexDeliveryId?:string;
-  rappidexStatus?:string; rappidexLastUpdateAt?:string; rappidexSyncError?:string;
+  rappidexStatus?:string; rappidexStatusLabel?:string; rappidexLastUpdateAt?:string; rappidexSyncError?:string;
   rappidexMotoboyName?:string; rappidexMotoboyPhone?:string;
   restaurantId?:RestaurantRef;
 };
@@ -35,10 +35,10 @@ export const orderStatus: Record<string,string> = {
 };
 const actions: Record<string,Array<[string,string]>> = {
   PENDING:[['REJECTED','Recusar'],['ACCEPTED','Aceitar pedido']],
-  ACCEPTED:[['PREPARING','Iniciar preparo']],
-  PREPARING:[['READY','Marcar como pronto']],
-  READY:[['OUT_FOR_DELIVERY','Saiu para entrega'],['COMPLETED','Concluir']],
-  OUT_FOR_DELIVERY:[['COMPLETED','Concluir']],
+  ACCEPTED:[['PREPARING','Iniciar preparo'],['CANCELLED','Cancelar pedido']],
+  PREPARING:[['READY','Marcar como pronto'],['CANCELLED','Cancelar pedido']],
+  READY:[['OUT_FOR_DELIVERY','Saiu para entrega'],['COMPLETED','Concluir'],['CANCELLED','Cancelar pedido']],
+  OUT_FOR_DELIVERY:[['COMPLETED','Concluir'],['CANCELLED','Cancelar pedido']],
 };
 const money = (value:number) => (value/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const itemTotalCents = (item:Order['items'][number]) => {
@@ -54,10 +54,15 @@ const customerWhatsAppHref = (phone?:string) => {
   return /^55\d{10,11}$/.test(digits)?`https://wa.me/${digits}`:'';
 };
 const rappidexStatusLabel:Record<string,string>={
-  AGUARDANDO_LIBERACAO:'Aguardando liberação',PENDENTE:'Pendente',ACAMINHO:'A caminho',
-  CHEGOU_ESTABELECIMENTO:'Chegou ao estabelecimento',COLETADO:'Coletado',
-  CHEGOU_DESTINO:'Chegou ao destino',AGUARDANDO_CODIGO:'Aguardando código',FINALIZADO:'Finalizado',CANCELADO:'Cancelado',
+  AGUARDANDO_LIBERACAO:'Aguardando liberação',PENDENTE:'Aguardando motoboy',
+  ACAMINHO:'Motoboy indo até o estabelecimento',
+  CHEGOU_ESTABELECIMENTO:'Motoboy chegou ao estabelecimento',
+  COLETADO:'Motoboy a caminho do cliente',
+  CHEGOU_DESTINO:'Motoboy chegou ao destino',
+  AGUARDANDO_CODIGO:'Aguardando código de entrega',FINALIZADO:'Entrega concluída',CANCELADO:'Entrega cancelada',
 };
+const rappidexAssignedStatuses=new Set(['ACAMINHO','CHEGOU_ESTABELECIMENTO','COLETADO','CHEGOU_DESTINO','AGUARDANDO_CODIGO']);
+const rappidexVisibleStatuses=new Set([...rappidexAssignedStatuses,'FINALIZADO','CANCELADO']);
 const groups = {
   pending:{label:'Para aceitar',api:'pending',statuses:['PENDING'],empty:'Nenhum pedido aguardando aceitação.'},
   'in-progress':{label:'Em andamento',api:'in_progress',statuses:['ACCEPTED','PREPARING','READY','OUT_FOR_DELIVERY'],empty:'Nenhum pedido em andamento.'},
@@ -374,15 +379,20 @@ function DateFilter({draft,setDraft,apply,error}:{draft:DateRange;setDraft:(valu
 function statusClass(status:string){if(['COMPLETED','READY'].includes(status))return'bg-success/10 text-success';if(['REJECTED','CANCELLED'].includes(status))return'bg-danger/10 text-danger';if(['PENDING','PREPARING'].includes(status))return'bg-accent/15 text-accent';return'bg-background text-ink'}
 function OrderCard({order:o,showRestaurant=false,updatingOrderId,updatingStatus,actionError,onReject,onChange}:{order:Order;showRestaurant?:boolean;updatingOrderId?:string;updatingStatus?:string;actionError?:{orderId:string;message:string};onReject:(o:Order)=>void;onChange:(o:Order,s:string,r?:string)=>Promise<void>}){
   const restaurant=typeof o.restaurantId==='object'?o.restaurantId:undefined;
-  const rappidexManaged=Boolean(o.rappidexDeliveryId)||Boolean(o.rappidexSyncRequested)||['SYNCED','PENDING','FAILED','CANCEL_PENDING'].includes(o.rappidexSyncStatus||'');
+  const rappidexManaged=Boolean(o.rappidexDeliveryId)||Boolean(o.rappidexSyncRequested)||['SYNCED','PENDING','FAILED','RELEASE_PENDING','CANCEL_PENDING'].includes(o.rappidexSyncStatus||'');
+  const rappidexAssigned=Boolean(o.rappidexStatus&&rappidexAssignedStatuses.has(o.rappidexStatus));
   const motoboyHref=customerWhatsAppHref(o.rappidexMotoboyPhone);
+  const showRappidexAsPrimary=Boolean(o.rappidexStatus&&rappidexVisibleStatuses.has(o.rappidexStatus));
+  const visibleStatus=showRappidexAsPrimary
+    ? (o.rappidexStatusLabel||rappidexStatusLabel[o.rappidexStatus||'']||o.rappidexStatus)
+    : (o.status==='READY'&&o.fulfillment==='PICKUP'?'Pronto para retirada':orderStatus[o.status]||o.status);
   return <article className={`min-w-0 rounded-2xl border bg-surface p-5 shadow-sm ${o.status==='PENDING'?'border-accent ring-2 ring-accent/20':''}`}>
-    <header className="flex flex-wrap justify-between gap-2"><div><strong className="text-lg">#{o.orderNumber||o._id.slice(-6)}</strong>{showRestaurant&&restaurant&&<p className="mt-1 text-sm font-bold text-ink">{restaurant.tradeName||restaurant.name||'Estabelecimento'}{restaurant.city&&<span className="font-normal text-stone-500"> · {restaurant.city}{restaurant.state?` / ${restaurant.state}`:''}</span>}</p>}<p className="text-sm text-stone-500">{o.customerName} • {new Date(o.createdAt).toLocaleString('pt-BR')}</p></div><span className={`h-fit rounded-full px-3 py-2 text-xs font-black ${statusClass(o.status)}`}>{o.status==='READY'&&o.fulfillment==='PICKUP'?'Pronto para retirada':orderStatus[o.status]||o.status}</span></header>
+    <header className="flex flex-wrap justify-between gap-2"><div><strong className="text-lg">#{o.orderNumber||o._id.slice(-6)}</strong>{showRestaurant&&restaurant&&<p className="mt-1 text-sm font-bold text-ink">{restaurant.tradeName||restaurant.name||'Estabelecimento'}{restaurant.city&&<span className="font-normal text-stone-500"> · {restaurant.city}{restaurant.state?` / ${restaurant.state}`:''}</span>}</p>}<p className="text-sm text-stone-500">{o.customerName} • {new Date(o.createdAt).toLocaleString('pt-BR')}</p></div><span className={`h-fit max-w-[18rem] rounded-full px-3 py-2 text-right text-xs font-black ${statusClass(o.status)}`}>{visibleStatus}</span></header>
     <div className="mt-4 space-y-3 border-y py-4">{o.items?.map((item,i)=><div key={i}><div className="flex items-start justify-between gap-4"><b className="min-w-0">{item.quantity}x {item.productName}</b><b className="shrink-0">{money(itemTotalCents(item))}</b></div>{item.addons?.length>0&&<p className="text-sm text-stone-500">+ {item.addons.map(a=>a.name).join(', ')}</p>}{item.observation&&<p className="text-sm">Obs.: {item.observation}</p>}</div>)}</div>
     <div className="mt-4 text-sm"><p><b>{o.fulfillment==='DELIVERY'?'ENTREGA':'RETIRADA'}</b></p>{o.phone&&(()=>{const href=customerWhatsAppHref(o.phone);return <p className="mt-2 flex flex-wrap items-center gap-2"><span>Telefone:</span>{href?<a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Abrir WhatsApp de ${o.customerName}`} className="inline-flex items-center gap-1.5 font-bold text-success underline underline-offset-2"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 11.5a8 8 0 0 1-11.7 7.1L4 20l1.4-4.2A8 8 0 1 1 20 11.5Z"/><path d="M9.1 8.2c.2-.3.4-.3.6-.3h.4c.2 0 .4.1.5.4l.8 1.9c.1.3.1.5-.1.7l-.6.8c-.1.2-.1.3 0 .5.6 1.2 1.5 2.1 2.7 2.7.2.1.4.1.5-.1l.8-1c.2-.2.4-.3.7-.2l1.8.8c.3.1.4.3.4.6 0 .4-.2 1.3-.8 1.8-.5.5-1.3.8-2.1.8-1.1 0-2.7-.5-4.4-2-2-1.7-3.2-4.2-3.3-5.7 0-.7.2-1.3.5-1.7l.6-1Z"/></svg><span>WhatsApp {o.phone}</span></a>:<b>{o.phone}</b>}</p>})()}{o.address&&<div className="mt-2"><p>{o.address.street}, {o.address.number}</p><p>{o.address.neighborhood}</p><p>{o.address.city} - {o.address.state} · CEP {o.address.zipCode}</p>{o.address.complement&&<p>Complemento: {o.address.complement}</p>}{o.address.reference&&<p>Referência: {o.address.reference}</p>}</div>}<p className="mt-2">Pagamento: <b>{paymentMethodLabel(o.paymentMethod)}</b></p>{o.paymentMethod==='CASH'&&<p>Troco: <b>{o.needsChange?`para ${money(o.changeForCents||0)} · estimado ${money(o.expectedChangeCents||0)}`:'não precisa'}</b></p>}</div>
     <div className="mt-4 space-y-1 text-sm"><p className="flex justify-between"><span>Subtotal</span><b>{money(o.subtotalCents??0)}</b></p><p className="flex justify-between"><span>Taxa de entrega</span><b>{money(o.deliveryFeeCents??0)}</b></p><p className="flex justify-between"><span>Taxa de serviço Menu Flow</span><b>{money(o.customerServiceFeeCents??0)}</b></p><p className="flex justify-between text-lg font-black"><span>Total pago pelo cliente</span><span>{money(o.totalCents??Math.round(o.total*100))}</span></p></div>
-    {(o.rappidexDeliveryId||o.rappidexStatus||o.rappidexSyncStatus)&&<div className="mt-4 rounded-xl border border-stone-200 bg-background p-4 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><b className="rounded-full bg-ink px-3 py-1 text-xs text-white">RAPPIDEX</b>{o.rappidexStatus&&<b>{rappidexStatusLabel[o.rappidexStatus]||o.rappidexStatus}</b>}</div>{o.rappidexDeliveryId&&<p className="mt-2 text-xs text-stone-500">Entrega: {o.rappidexDeliveryId}</p>}{o.rappidexMotoboyName&&<p className="mt-2">Motoboy: <b>{o.rappidexMotoboyName}</b></p>}{o.rappidexMotoboyPhone&&<p className="mt-1">Telefone: {motoboyHref?<a href={motoboyHref} target="_blank" rel="noopener noreferrer" className="font-bold text-success underline underline-offset-2">WhatsApp {o.rappidexMotoboyPhone}</a>:<b>{o.rappidexMotoboyPhone}</b>}</p>}{o.rappidexSyncStatus==='FAILED'&&o.rappidexSyncError&&<p className="mt-2 text-danger">Sincronização pendente: {o.rappidexSyncError}</p>}</div>}
-    {!['COMPLETED','REJECTED','CANCELLED'].includes(o.status)&&<div className="mt-4 flex flex-wrap justify-end gap-2">{(actions[o.status]||[]).filter(([s])=>!(o.fulfillment==='PICKUP'&&s==='OUT_FOR_DELIVERY')&&!(o.fulfillment==='DELIVERY'&&o.status==='READY'&&s==='COMPLETED')&&!(rappidexManaged&&s==='OUT_FOR_DELIVERY')).map(([status,label])=><button key={status} disabled={Boolean(updatingOrderId)} onClick={()=>status==='REJECTED'?onReject(o):void onChange(o,status).catch(()=>undefined)} className={`rounded-xl px-4 py-3 font-bold disabled:opacity-50 ${status==='REJECTED'?'border text-danger':'bg-ink text-white'}`}>{updatingOrderId===o._id&&updatingStatus===status?'Atualizando...':label}</button>)}</div>}
+    {(o.rappidexDeliveryId||o.rappidexStatus||o.rappidexSyncStatus)&&<div className="mt-4 rounded-xl border border-stone-200 bg-background p-4 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><b className="rounded-full bg-ink px-3 py-1 text-xs text-white">RAPPIDEX</b>{o.rappidexStatus&&<b>{o.rappidexStatusLabel||rappidexStatusLabel[o.rappidexStatus]||o.rappidexStatus}</b>}</div>{o.rappidexDeliveryId&&<p className="mt-2 text-xs text-stone-500">Entrega: {o.rappidexDeliveryId}</p>}{o.rappidexMotoboyName&&<p className="mt-2">Motoboy: <b>{o.rappidexMotoboyName}</b></p>}{o.rappidexMotoboyPhone&&<p className="mt-1">Telefone: {motoboyHref?<a href={motoboyHref} target="_blank" rel="noopener noreferrer" className="font-bold text-success underline underline-offset-2">WhatsApp {o.rappidexMotoboyPhone}</a>:<b>{o.rappidexMotoboyPhone}</b>}</p>}{o.rappidexSyncStatus==='FAILED'&&o.rappidexSyncError&&<p className="mt-2 text-danger">Sincronização pendente: {o.rappidexSyncError}</p>}</div>}
+    {!['COMPLETED','REJECTED','CANCELLED'].includes(o.status)&&<div className="mt-4 flex flex-wrap justify-end gap-2">{(actions[o.status]||[]).filter(([s])=>!(o.fulfillment==='PICKUP'&&s==='OUT_FOR_DELIVERY')&&!(o.fulfillment==='DELIVERY'&&o.status==='READY'&&s==='COMPLETED')&&!(rappidexManaged&&['OUT_FOR_DELIVERY','COMPLETED'].includes(s))&&!(rappidexAssigned&&s==='CANCELLED')).map(([status,label])=><button key={status} disabled={Boolean(updatingOrderId)} onClick={()=>{if(status==='REJECTED'){onReject(o);return;}if(status==='CANCELLED'&&!window.confirm('Deseja cancelar este pedido?'))return;void onChange(o,status,status==='CANCELLED'?'Cancelado pelo estabelecimento.':undefined).catch(()=>undefined)}} className={`rounded-xl px-4 py-3 font-bold disabled:opacity-50 ${['REJECTED','CANCELLED'].includes(status)?'border text-danger':'bg-ink text-white'}`}>{updatingOrderId===o._id&&updatingStatus===status?'Atualizando...':label}</button>)}</div>}
     {actionError?.orderId===o._id&&<p role="alert" className="mt-3 rounded-xl bg-danger/10 p-3 font-bold text-danger">{actionError.message}</p>}
     {(o.rejectionReason||o.cancellationReason)&&<p className="mt-3 rounded-xl bg-danger/10 p-3 text-danger">Motivo: {o.rejectionReason||o.cancellationReason}</p>}
   </article>;
