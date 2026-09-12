@@ -216,43 +216,47 @@ export function Menu({ slug }: { slug: string }) {
   if (!restaurant) return <StatePage message="Carregando cardápio…" />;
 
   return (
-    <main className={`min-h-screen bg-background font-sans ${cart.length ? 'pb-28 lg:pb-12' : 'pb-12'}`}>
-      {message && <div role="status" aria-live="polite" className="fixed left-4 right-4 top-4 z-[80] mx-auto max-w-md rounded-2xl bg-ink p-4 text-sm font-bold text-white shadow-2xl sm:left-auto sm:right-6 sm:top-6 sm:w-full">{message}</div>}
+    <main className={`min-h-screen bg-background font-sans ${cart.length ? 'pb-28 lg:pb-14' : 'pb-12'}`}>
+      {message && <div role="status" aria-live="polite" className="fixed left-4 right-4 top-4 z-[80] mx-auto max-w-md rounded-[22px] bg-ink px-4 py-3 text-sm font-bold text-white shadow-2xl sm:left-auto sm:right-6 sm:top-6 sm:w-full">{message}</div>}
       <MenuHeader restaurant={restaurant} slug={slug} />
 
-      <div className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-9">
-        <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1fr)_350px] xl:gap-9">
+      <div className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:gap-8">
           <div className="min-w-0">
             {products.length === 0 ? <EmptyMenu /> : <>
-              <div className="sticky top-0 z-30 -mx-4 border-y border-border/70 bg-background/95 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:rounded-[26px] lg:border lg:bg-surface lg:p-3 lg:shadow-sm">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <nav aria-label="Categorias" className="scrollbar-none flex min-w-0 gap-2 overflow-x-auto pb-1 xl:pb-0">
-                    {visibleCategories.map((category) => <a key={category._id} href={`#${category._id}`} className="group inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-white px-4 py-2.5 text-sm font-extrabold text-stone-700 shadow-sm transition hover:border-ink/30 hover:bg-ink hover:text-white">
-                      <CategoryIcon name={category.name} />
-                      <span>{category.name}</span>
-                    </a>)}
-                  </nav>
-                  <label className="relative block w-full shrink-0 xl:w-[310px]">
-                    <span className="sr-only">Buscar no cardápio</span>
-                    <SearchIcon />
-                    <input value={menuQuery} onChange={(event) => setMenuQuery(event.target.value)} placeholder="Buscar no cardápio..." className="h-12 w-full rounded-full border border-border bg-white pl-11 pr-4 text-sm font-semibold text-stone-700 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-ink focus:ring-4 focus:ring-ink/10" />
-                  </label>
+              <div className="sticky top-3 z-30 mb-1">
+                <div className="mf-panel overflow-hidden rounded-[26px] px-3 py-3 sm:px-4 lg:px-5">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <nav aria-label="Categorias" className="scrollbar-none flex min-w-0 gap-2 overflow-x-auto pb-1 xl:pb-0">
+                      {visibleCategories.map((category) => <a key={category._id} href={`#${category._id}`} className="group inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-white px-4 py-2.5 text-sm font-extrabold text-stone-700 shadow-sm transition hover:border-ink/20 hover:bg-ink hover:text-white">
+                        <CategoryIcon name={category.name} />
+                        <span>{category.name}</span>
+                      </a>)}
+                    </nav>
+                    <label className="relative block w-full shrink-0 xl:w-[320px]">
+                      <span className="sr-only">Buscar no cardápio</span>
+                      <SearchIcon />
+                      <input value={menuQuery} onChange={(event) => setMenuQuery(event.target.value)} placeholder="Buscar no cardápio..." className="h-12 w-full rounded-full border border-border bg-white pl-11 pr-4 text-sm font-semibold text-stone-700 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-ink focus:ring-4 focus:ring-ink/10" />
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              {filteredCategories.length === 0 ? <div className="mt-8 rounded-[28px] border border-border bg-surface px-6 py-14 text-center shadow-sm"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-ink/10 text-ink"><SearchIcon compact /></div><h2 className="mt-4 text-xl font-black">Nenhum produto encontrado</h2><p className="mt-2 text-sm text-stone-500">Tente buscar por outro nome ou categoria.</p><button type="button" onClick={() => setMenuQuery('')} className="mt-5 min-h-11 rounded-xl bg-ink px-5 text-sm font-black text-white">LIMPAR BUSCA</button></div> : filteredCategories.map((category) => (
-                <section id={category._id} key={category._id} className="scroll-mt-28 pt-8 first:pt-7">
+              {filteredCategories.length === 0 ? <div className="mt-6 rounded-[28px] border border-border bg-white px-6 py-14 text-center shadow-sm"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-ink/10 text-ink"><SearchIcon compact /></div><h2 className="mt-4 text-xl font-black">Nenhum produto encontrado</h2><p className="mt-2 text-sm text-stone-500">Tente buscar por outro nome ou categoria.</p><button type="button" onClick={() => setMenuQuery('')} className="mt-5 min-h-11 rounded-xl bg-ink px-5 text-sm font-black text-white">LIMPAR BUSCA</button></div> : filteredCategories.map((category) => (
+                <section id={category._id} key={category._id} className="scroll-mt-28 pt-6 first:pt-5 sm:pt-8">
                   <div className="mb-4 flex items-end justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-3">
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink/10 text-ink"><CategoryIcon name={category.name} large /></span>
-                        <h2 className="text-2xl font-black tracking-tight text-stone-900 sm:text-[28px]">{category.name}</h2>
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink/10 text-ink"><CategoryIcon name={category.name} large /></span>
+                        <div>
+                          <h2 className="text-2xl font-black tracking-tight text-stone-900 sm:text-[29px]">{category.name}</h2>
+                          <p className="mt-1 text-sm font-medium text-stone-500">{category.products.length} {category.products.length === 1 ? 'opção disponível' : 'opções disponíveis'}</p>
+                        </div>
                       </div>
-                      <p className="mt-1 pl-[52px] text-sm font-medium text-stone-500">{category.products.length} {category.products.length === 1 ? 'opção disponível' : 'opções disponíveis'}</p>
                     </div>
                     <a href="#topo-cardapio" className="hidden text-sm font-black text-ink hover:underline sm:inline">Topo ↑</a>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
                     {category.products.map((product) => <ProductCard key={product._id} product={product} open={restaurant.canAcceptOrdersNow} add={() => product.addonGroups?.length ? (setSelectedProduct(product), setSelectedAddons([])) : add(product)} />)}
                   </div>
                 </section>
@@ -275,14 +279,13 @@ export function Menu({ slug }: { slug: string }) {
     </main>
   );
 }
-
 function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string }) {
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
   const establishmentLabel = restaurant.establishmentTypeName ?? legacyEstablishmentLabel(restaurant.establishmentType);
   const availability = restaurant.canAcceptOrdersNow ? 'Aberto agora' : restaurant.openingStatus.status === 'UNCONFIGURED' ? 'Horário não informado' : restaurant.openingStatus.status === 'OPEN' && !restaurant.acceptingOrders ? 'Pedidos pausados' : 'Fechado';
   const serviceLabel = restaurant.deliveryEnabled && restaurant.pickupEnabled ? 'Entrega e retirada' : restaurant.deliveryEnabled ? 'Entrega disponível' : 'Retirada no local';
 
-  return <header id="topo-cardapio" className="border-b border-border/70 bg-surface/65 pb-5 backdrop-blur">
+  return <header id="topo-cardapio" className="pb-5 pt-3 sm:pt-4">
     <div className="mx-auto flex min-h-16 w-full max-w-[1480px] items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
       <Link href="/" aria-label="Voltar para a página inicial do Menu Flow" className="shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         <BrandLogo variant="wordmark" priority className="h-9 w-auto bg-transparent sm:h-11 [&_img]:h-full [&_img]:w-auto" />
@@ -291,31 +294,52 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
     </div>
 
     <div className="mx-auto w-full max-w-[1480px] px-4 sm:px-6 lg:px-8">
-      <section className="overflow-hidden rounded-[28px] border border-border bg-white shadow-[0_18px_60px_rgba(41,37,36,.10)] sm:rounded-[34px]">
-        <div className="grid lg:grid-cols-[minmax(330px,.82fr)_minmax(0,1.35fr)]">
-          <div className="relative z-10 order-2 flex flex-col justify-center p-5 sm:p-7 lg:order-1 lg:min-h-[300px] lg:p-9 xl:p-11">
-            <div className="flex items-center gap-4">
+      <section className="relative overflow-hidden rounded-[30px] border border-border/90 bg-white shadow-[0_20px_65px_rgba(41,37,36,.10)] sm:rounded-[36px]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-accent/10 to-transparent" />
+        <div className="grid xl:grid-cols-[minmax(0,.88fr)_minmax(0,1.12fr)]">
+          <div className="relative order-2 flex flex-col justify-center p-5 sm:p-7 xl:order-1 xl:min-h-[420px] xl:p-10">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-success"><span className={`h-2 w-2 rounded-full ${restaurant.canAcceptOrdersNow ? 'bg-success' : 'bg-danger'}`} />{availability}</span>
+              <span className="inline-flex rounded-full border border-border bg-background/80 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-stone-500">{establishmentLabel}</span>
+            </div>
+
+            <div className="mt-5 flex items-start gap-4 sm:gap-5">
               {restaurant.logoUrl
-                ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-16 w-16 shrink-0 rounded-2xl border border-border bg-white object-contain p-1.5 shadow-sm sm:h-20 sm:w-20" />
-                : <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-ink text-2xl font-black text-white shadow-sm sm:h-20 sm:w-20 sm:text-3xl">{restaurant.name.charAt(0)}</span>}
+                ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-16 w-16 shrink-0 rounded-[22px] border border-border bg-white object-contain p-1.5 shadow-md sm:h-[84px] sm:w-[84px]" />
+                : <span className="grid h-16 w-16 shrink-0 place-items-center rounded-[22px] bg-ink text-2xl font-black text-white shadow-md sm:h-[84px] sm:w-[84px] sm:text-3xl">{restaurant.name.charAt(0)}</span>}
               <div className="min-w-0">
-                <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide ${restaurant.canAcceptOrdersNow ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}><span className={`h-2 w-2 rounded-full ${restaurant.canAcceptOrdersNow ? 'bg-success' : 'bg-danger'}`} />{availability}</span>
-                <h1 className="mt-2 break-words text-3xl font-black leading-[1.05] tracking-tight text-stone-900 sm:text-4xl xl:text-[44px]">{restaurant.tradeName || restaurant.name}</h1>
+                <h1 className="break-words text-[2rem] font-black leading-[0.98] tracking-tight text-stone-900 sm:text-[2.65rem] xl:text-[3.25rem]">{restaurant.tradeName || restaurant.name}</h1>
+                <p className="mt-3 max-w-xl text-sm font-semibold text-stone-500 sm:text-base">{[location, serviceLabel].filter(Boolean).join(' • ')}</p>
               </div>
             </div>
-            <p className="mt-4 max-w-xl text-sm font-semibold text-stone-500 sm:text-base">{[establishmentLabel, location].filter(Boolean).join(' • ')}</p>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-stone-600 sm:text-[15px]">{restaurant.description ?? 'Comida boa, atendimento prático e seu pedido do seu jeito.'}</p>
-            <details className="mt-5 max-w-xl rounded-2xl border border-border bg-background/70 p-3.5"><summary className="flex cursor-pointer list-none items-center gap-2 font-black text-ink"><ClockIcon /><span>Horários de funcionamento</span><span className="ml-auto text-stone-400">⌄</span></summary><div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">{restaurant.businessHours.length ? restaurant.businessHours.map(day => <p key={day.dayOfWeek} className="flex justify-between gap-4"><b>{['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][day.dayOfWeek]}</b><span className="text-right text-stone-600">{day.isOpen ? day.periods.map(period => `${period.openTime} — ${period.closeTime}`).join(' · ') : 'Fechado'}</span></p>) : <p>Horários ainda não informados.</p>}<p className="pt-1 text-xs text-stone-400">Fuso: {restaurant.timezone}</p></div></details>
+
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-stone-600 sm:text-[15px]">{restaurant.description ?? 'Comida boa, atendimento prático e seu pedido do seu jeito.'}</p>
+
+            <details className="mt-6 max-w-2xl rounded-[24px] border border-border bg-background/75 p-4 shadow-sm">
+              <summary className="flex cursor-pointer list-none items-center gap-2 font-black text-ink">
+                <ClockIcon />
+                <span>Horários de funcionamento</span>
+                <span className="ml-auto text-stone-400">⌄</span>
+              </summary>
+              <div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">
+                {restaurant.businessHours.length ? restaurant.businessHours.map(day => <p key={day.dayOfWeek} className="flex flex-col justify-between gap-1 sm:flex-row sm:gap-4"><b>{['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][day.dayOfWeek]}</b><span className="text-stone-600 sm:text-right">{day.isOpen ? day.periods.map(period => `${period.openTime} — ${period.closeTime}`).join(' · ') : 'Fechado'}</span></p>) : <p>Horários ainda não informados.</p>}
+                <p className="pt-1 text-xs text-stone-400">Fuso: {restaurant.timezone}</p>
+              </div>
+            </details>
           </div>
 
-          <div className="relative order-1 min-h-[210px] overflow-hidden bg-gradient-to-br from-ink via-primary-hover to-accent sm:min-h-[260px] lg:order-2 lg:min-h-[300px]">
+          <div className="relative order-1 min-h-[250px] overflow-hidden bg-gradient-to-br from-ink via-primary-hover to-accent sm:min-h-[320px] xl:order-2 xl:min-h-[420px]">
             {(restaurant.bannerDesktopUrl || restaurant.bannerUrl) ? <>
-              <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl brightness-75" />
+              <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75" />
               <picture className="relative block h-full w-full">
                 <source media="(max-width: 767px)" srcSet={restaurant.bannerMobileUrl || restaurant.bannerDesktopUrl || restaurant.bannerUrl} />
                 <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-cover" />
               </picture>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/5" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/45 via-black/5 to-transparent" />
+              <div className="absolute bottom-4 left-4 right-4 rounded-[24px] border border-white/15 bg-black/25 p-4 text-white backdrop-blur-md sm:bottom-6 sm:left-6 sm:right-auto sm:max-w-[300px] sm:p-5">
+                <p className="text-lg font-black leading-tight sm:text-2xl">Sabor que cria experiências.</p>
+                <p className="mt-2 text-sm text-white/80">Escolha seus favoritos e finalize com praticidade no Menu Flow.</p>
+              </div>
             </> : <>
               <div className="absolute -right-10 -top-10 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
               <div className="absolute bottom-5 right-6 max-w-[250px] rounded-3xl border border-white/15 bg-black/15 p-5 text-right text-white backdrop-blur-sm sm:bottom-8 sm:right-8">
@@ -326,10 +350,10 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
           </div>
         </div>
 
-        <div className="grid border-t border-border bg-background/45 sm:grid-cols-3">
-          <div className="flex min-h-[74px] items-center gap-3 border-b border-border px-5 py-3 sm:border-b-0 sm:border-r sm:px-6"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success/10 text-success"><ClockIcon /></span><div><b className="block text-sm">{availability}</b><span className="text-xs text-stone-500">Confira os horários da loja</span></div></div>
-          <div className="flex min-h-[74px] items-center gap-3 border-b border-border px-5 py-3 sm:border-b-0 sm:border-r sm:px-6"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink/10 text-ink"><LocationIcon /></span><div><b className="block text-sm">{location || 'Localização da loja'}</b><span className="text-xs text-stone-500">{restaurant.address || 'Consulte no pedido'}</span></div></div>
-          <div className="flex min-h-[74px] items-center gap-3 px-5 py-3 sm:px-6"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent"><DeliveryIcon /></span><div><b className="block text-sm">{serviceLabel}</b><span className="text-xs text-stone-500">Escolha na finalização</span></div></div>
+        <div className="grid border-t border-border bg-background/45 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="flex min-h-[76px] items-center gap-3 border-b border-border px-5 py-4 sm:px-6 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success/10 text-success"><ClockIcon /></span><div><b className="block text-sm">{availability}</b><span className="text-xs text-stone-500">Confira os horários da loja</span></div></div>
+          <div className="flex min-h-[76px] items-center gap-3 border-b border-border px-5 py-4 sm:px-6 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink/10 text-ink"><LocationIcon /></span><div><b className="block text-sm">{location || 'Localização da loja'}</b><span className="text-xs text-stone-500">{restaurant.address || 'Consulte no pedido'}</span></div></div>
+          <div className="flex min-h-[76px] items-center gap-3 px-5 py-4 sm:px-6 sm:col-span-2 xl:col-span-1"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent"><DeliveryIcon /></span><div><b className="block text-sm">{serviceLabel}</b><span className="text-xs text-stone-500">Escolha na finalização</span></div></div>
         </div>
       </section>
     </div>
@@ -363,22 +387,22 @@ function EmptyMenu() {
 
 function ProductCard({ product, open, add }: { product: Product; open: boolean; add: () => void }) {
   const hasPromotion = product.promotionalPrice != null && product.promotionalPrice < product.price;
-  return <article className={`group relative flex min-w-0 overflow-hidden rounded-[24px] border bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(41,37,36,.12)] sm:flex-col ${product.featured ? 'border-accent/50 ring-1 ring-accent/15' : 'border-border'}`}>
-    <div className="relative h-36 w-36 shrink-0 overflow-hidden bg-stone-100 sm:aspect-[4/3] sm:h-auto sm:w-full">
+  return <article className={`group relative flex min-w-0 overflow-hidden rounded-[26px] border bg-white shadow-[0_14px_36px_rgba(41,37,36,.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(41,37,36,.11)] lg:flex-col ${product.featured ? 'border-accent/60 ring-1 ring-accent/15' : 'border-border/90'}`}>
+    <div className="relative h-32 w-32 shrink-0 overflow-hidden bg-stone-100 sm:h-36 sm:w-36 lg:aspect-[16/10] lg:h-auto lg:w-full">
       {product.imageUrl ? <img src={product.imageUrl} alt={product.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" /> : <div className="grid h-full w-full place-items-center bg-gradient-to-br from-stone-100 via-white to-ink/10 text-3xl font-black text-ink/35" aria-label="Produto sem imagem">MF</div>}
       {product.featured && <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-gold px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg">★ Destaque</div>}
       {!open && <div className="absolute inset-0 grid place-items-center bg-black/45 p-3 text-center text-xs font-black uppercase tracking-wide text-white backdrop-blur-[1px]">Pedidos indisponíveis agora</div>}
     </div>
     <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
       <div className="min-w-0">
-        <h3 className="break-words text-[17px] font-black leading-tight text-stone-900 sm:text-lg">{product.name}</h3>
+        <h3 className="break-words text-[17px] font-black leading-tight text-stone-900 sm:text-xl">{product.name}</h3>
         <p className="mt-2 line-clamp-2 text-sm leading-5 text-stone-500">{product.description || 'Confira este produto.'}</p>
       </div>
       <div className="mt-auto pt-4">
-        {hasPromotion && <div className="mb-1.5 flex flex-wrap items-center gap-2"><span className="rounded-full bg-danger/10 px-2 py-1 text-[9px] font-black uppercase tracking-[.08em] text-danger">Oferta</span><del className="text-xs font-bold text-stone-400 decoration-2">{money(product.price)}</del></div>}
-        <div className="flex items-end justify-between gap-3 sm:block">
+        {hasPromotion && <div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-danger/10 px-2 py-1 text-[9px] font-black uppercase tracking-[.08em] text-danger">Oferta</span><del className="text-xs font-bold text-stone-400 decoration-2">{money(product.price)}</del></div>}
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between lg:flex-row lg:items-end">
           <b className="text-xl font-black tracking-tight text-ink">{money(product.promotionalPrice ?? product.price)}</b>
-          <button type="button" disabled={!open} onClick={add} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40 sm:mt-3 sm:w-full"><span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-base leading-none">+</span>Adicionar</button>
+          <button type="button" disabled={!open} onClick={add} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto lg:w-full"><span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-base leading-none">+</span>Adicionar</button>
         </div>
       </div>
     </div>
@@ -387,16 +411,16 @@ function ProductCard({ product, open, add }: { product: Product; open: boolean; 
 
 function CartPanel({ cart, subtotal, addonPrice, setQuantity, checkout, requiresCustomerAuth }: { cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; checkout: () => void; requiresCustomerAuth: boolean }) {
   const count = cart.reduce((total, item) => total + item.quantity, 0);
-  return <section className="overflow-hidden rounded-[28px] border border-border bg-white shadow-[0_18px_50px_rgba(41,37,36,.10)]">
+  return <section className="overflow-hidden rounded-[30px] border border-border/90 bg-white shadow-[0_20px_55px_rgba(41,37,36,.10)]">
     <div className="flex items-center gap-3 border-b border-border px-5 py-5">
       <span className="relative grid h-11 w-11 place-items-center rounded-2xl bg-ink/10 text-ink"><BagIcon />{count > 0 && <span className="absolute -right-1.5 -top-1.5 grid h-6 min-w-6 place-items-center rounded-full bg-ink px-1.5 text-[10px] font-black text-white ring-2 ring-white">{count}</span>}</span>
       <div><h2 className="text-xl font-black tracking-tight">Sua sacola</h2><p className="mt-0.5 text-xs font-medium text-stone-500">{cart.length ? 'Confira seus itens' : 'Pronta para receber seus favoritos'}</p></div>
     </div>
     {cart.length === 0 ? <div className="px-5 py-12 text-center text-stone-500"><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-background text-ink"><BagIcon /></span><p className="mt-4 font-black text-stone-700">Sua sacola está vazia</p><p className="mx-auto mt-1 max-w-[220px] text-sm leading-5">Adicione produtos do cardápio para começar.</p></div> : <div className="p-5">
       <div className="divide-y divide-border">{cart.map((item) => <CartRow key={`${item._id}-${item.addonNames.join()}`} item={item} addonPrice={addonPrice} setQuantity={setQuantity} />)}</div>
-      <div className="mt-5 rounded-2xl bg-background p-4"><div className="flex items-center justify-between gap-4"><span className="text-sm font-semibold text-stone-500">Subtotal</span><b className="whitespace-nowrap text-lg">{money(subtotal)}</b></div><p className="mt-2 text-xs leading-5 text-stone-400">Taxas e forma de entrega são confirmadas na finalização.</p></div>
-      {requiresCustomerAuth && <p className="mt-3 rounded-2xl border border-border bg-white p-3 text-xs font-semibold leading-5 text-stone-600">Para finalizar, entre na sua conta de cliente ou crie um cadastro. Sua sacola será mantida.</p>}
-      <button type="button" onClick={checkout} className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-black text-white shadow-lg shadow-ink/10 hover:bg-primary-hover">{requiresCustomerAuth ? 'ENTRAR PARA FINALIZAR' : 'FINALIZAR PEDIDO'}<span aria-hidden>→</span></button>
+      <div className="mt-5 rounded-[24px] border border-border bg-background/70 p-4"><div className="flex items-center justify-between gap-4"><span className="text-sm font-semibold text-stone-500">Subtotal</span><b className="whitespace-nowrap text-lg">{money(subtotal)}</b></div><p className="mt-2 text-xs leading-5 text-stone-400">Taxas e forma de entrega são confirmadas na finalização.</p></div>
+      {requiresCustomerAuth && <p className="mt-3 rounded-[22px] border border-border bg-white p-3 text-xs font-semibold leading-5 text-stone-600">Para finalizar, entre na sua conta de cliente ou crie um cadastro. Sua sacola será mantida.</p>}
+      <button type="button" onClick={checkout} className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10 hover:bg-primary-hover">{requiresCustomerAuth ? 'ENTRAR PARA FINALIZAR' : 'FINALIZAR PEDIDO'}<span aria-hidden>→</span></button>
     </div>}
   </section>;
 }
@@ -412,7 +436,7 @@ function CartRow({ item, addonPrice, setQuantity }: { item: CartItem; addonPrice
 }
 
 function MobileCartBar({ count, subtotal, open, requiresCustomerAuth }: { count: number; subtotal: number; open: () => void; requiresCustomerAuth: boolean }) {
-  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/95 px-3 pt-2 shadow-[0_-12px_35px_rgba(41,37,36,.12)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'max(.65rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-2xl bg-ink px-4 font-black text-white shadow-lg shadow-ink/10"><span className="flex min-w-0 items-center gap-3"><span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10"><BagIcon /><span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-ink">{count}</span></span><span className="truncate text-sm">{requiresCustomerAuth ? 'Entrar para finalizar' : 'Ver sacola'}</span></span><span className="shrink-0 whitespace-nowrap text-sm">{money(subtotal)} →</span></button></aside>;
+  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/96 px-3 pt-2 shadow-[0_-14px_36px_rgba(41,37,36,.12)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'max(.65rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10"><span className="flex min-w-0 items-center gap-3"><span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10"><BagIcon /><span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-ink">{count}</span></span><span className="truncate text-sm">{requiresCustomerAuth ? 'Entrar para finalizar' : 'Ver sua sacola'}</span></span><span className="shrink-0 whitespace-nowrap text-sm">{money(subtotal)} →</span></button></aside>;
 }
 
 function ModalFrame({ label, close, children, sheet = false }: { label: string; close: () => void; children: React.ReactNode; sheet?: boolean }) {

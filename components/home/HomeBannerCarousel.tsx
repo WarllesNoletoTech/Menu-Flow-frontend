@@ -33,8 +33,8 @@ export function HomeBannerCarousel({ banners }: { banners: PublicHomeBanner[] })
     : picture;
 
   return (
-    <section aria-label="Campanhas em destaque" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">
-      <div className="relative overflow-hidden rounded-[24px] border border-border bg-stone-200 shadow-[0_12px_40px_rgba(41,37,36,.09)] aspect-[4/5] sm:rounded-[30px] md:aspect-[3/1]">
+    <section aria-label="Campanhas em destaque" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+      <div className="relative overflow-hidden rounded-[28px] border border-border/90 bg-stone-200 shadow-[0_18px_50px_rgba(41,37,36,.10)] aspect-[5/6] sm:rounded-[32px] md:aspect-[16/6] lg:aspect-[16/5]">
         {campaign}
         {banners.length > 1 && <>
           <button type="button" aria-label="Banner anterior" onClick={() => move(-1)} className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/45 text-xl font-black text-white backdrop-blur hover:bg-black/60 sm:left-4 sm:h-11 sm:w-11">‹</button>

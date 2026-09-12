@@ -83,37 +83,39 @@ export default function HomePage() {
       <Header cities={cities} city={city} onCityChange={selectCity} search={search} onSearchChange={setSearch} />
       <HomeBannerCarousel banners={banners} />
 
-      <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-7 sm:px-6 sm:pt-9 lg:pb-16">
-        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filtrar por tipo">
-          <div className="flex min-w-max gap-2 pb-1 sm:min-w-0 sm:flex-wrap">
-            {[{ id: 'all', name: 'Todos', slug: '' }, ...types].map((option) => (
-              <button
-                key={option.id}
-                onClick={() => { setType(option.slug); setPage(1); }}
-                aria-pressed={type === option.slug}
-                className={`min-h-10 rounded-full border px-4 py-2 text-sm font-black transition ${type === option.slug ? 'border-primary bg-primary text-white shadow-sm' : 'border-border bg-surface text-stone-700 hover:border-primary/30 hover:bg-white'}`}
-              >
-                {option.name}
-              </button>
-            ))}
+      <section className="mx-auto w-full max-w-7xl px-4 pb-14 pt-6 sm:px-6 sm:pt-8 lg:px-8 lg:pb-16">
+        <div className="mf-soft-card rounded-[30px] px-4 py-4 sm:px-5 sm:py-5">
+          <div className="scrollbar-none -mx-1 overflow-x-auto px-1" aria-label="Filtrar por tipo">
+            <div className="flex min-w-max gap-2 pb-1 sm:min-w-0 sm:flex-wrap">
+              {[{ id: 'all', name: 'Todos', slug: '' }, ...types].map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => { setType(option.slug); setPage(1); }}
+                  aria-pressed={type === option.slug}
+                  className={`min-h-11 rounded-full border px-4 py-2 text-sm font-black transition ${type === option.slug ? 'border-primary bg-primary text-white shadow-sm' : 'border-border bg-white text-stone-700 hover:border-primary/30 hover:bg-primary/5'}`}
+                >
+                  {option.name}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="mt-7 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[.18em] text-accent">Explore perto de você</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-stone-900 sm:text-3xl lg:text-[34px]">{heading}</h2>
-            {result && <p className="mt-2 text-sm font-medium text-stone-500">{result.pagination.total} {result.pagination.total === 1 ? 'estabelecimento encontrado' : 'estabelecimentos encontrados'}</p>}
+          <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[.22em] text-accent">Explore perto de você</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-stone-900 sm:text-3xl lg:text-[36px]">{heading}</h2>
+              {result && <p className="mt-2 text-sm font-medium text-stone-500">{result.pagination.total} {result.pagination.total === 1 ? 'estabelecimento encontrado' : 'estabelecimentos encontrados'}</p>}
+            </div>
+            <label className="mf-pill inline-flex min-h-11 cursor-pointer items-center gap-3 self-start rounded-2xl px-4 py-2.5 text-sm font-black text-stone-700 lg:self-auto">
+              <input type="checkbox" checked={openOnly} onChange={(event) => { setOpenOnly(event.target.checked); setPage(1); }} />
+              Abertos agora
+            </label>
           </div>
-          <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 self-start rounded-2xl border border-border bg-surface px-4 py-2.5 text-sm font-black shadow-sm sm:self-auto">
-            <input type="checkbox" checked={openOnly} onChange={(event) => { setOpenOnly(event.target.checked); setPage(1); }} />
-            Abertos agora
-          </label>
         </div>
 
         <div className="mt-6">
           {error ? (
-            <div role="alert" className="rounded-[26px] border border-danger/20 bg-danger/10 p-8 text-center text-danger">
+            <div role="alert" className="rounded-[28px] border border-danger/20 bg-danger/10 p-8 text-center text-danger">
               <b>Algo não saiu como esperado.</b><p className="mt-2">{error}</p>
             </div>
           ) : loading ? <RestaurantGridSkeleton /> : result?.items.length ? (
@@ -121,21 +123,21 @@ export default function HomePage() {
               <RestaurantGrid restaurants={result.items} />
               {result.pagination.pages > 1 && (
                 <nav className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                  <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="min-h-11 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-black disabled:opacity-40">Anterior</button>
+                  <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="min-h-11 rounded-2xl border border-border bg-white px-5 py-3 text-sm font-black shadow-sm disabled:opacity-40">Anterior</button>
                   <span className="text-sm font-semibold text-stone-500">Página {page} de {result.pagination.pages}</span>
-                  <button disabled={page === result.pagination.pages} onClick={() => setPage((value) => value + 1)} className="min-h-11 rounded-xl bg-primary px-5 py-3 text-sm font-black text-white disabled:opacity-40">Próxima</button>
+                  <button disabled={page === result.pagination.pages} onClick={() => setPage((value) => value + 1)} className="min-h-11 rounded-2xl bg-primary px-5 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40">Próxima</button>
                 </nav>
               )}
             </>
           ) : (
-            <div className="rounded-[26px] border border-dashed border-stone-300 bg-surface p-10 text-center">
+            <div className="rounded-[28px] border border-dashed border-stone-300 bg-white p-10 text-center shadow-sm">
               <span className="text-4xl">🏪</span><h3 className="mt-4 text-xl font-black">Nenhum estabelecimento encontrado</h3><p className="mt-2 text-stone-500">Tente outra busca, cidade ou remova algum filtro.</p>
             </div>
           )}
         </div>
       </section>
 
-      <footer className="border-t border-border bg-surface px-4 py-8 text-center text-sm text-stone-500"><b className="text-primary">MENU FLOW</b> · Estabelecimentos e produtos em um só lugar.</footer>
+      <footer className="border-t border-border bg-surface/90 px-4 py-8 text-center text-sm text-stone-500"><b className="text-primary">MENU FLOW</b> · Estabelecimentos e produtos em um só lugar.</footer>
     </main>
   );
 }

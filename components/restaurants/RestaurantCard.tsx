@@ -16,9 +16,9 @@ export function RestaurantCard({ restaurant }: { restaurant: PublicRestaurant })
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
 
   return (
-    <article className="group min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[0_8px_30px_rgba(41,37,36,.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(41,37,36,.11)]">
+    <article className="group min-w-0 overflow-hidden rounded-[28px] border border-border/90 bg-white shadow-[0_14px_36px_rgba(41,37,36,.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_52px_rgba(41,37,36,.12)]">
       <Link href={`/${restaurant.slug}`} className="block h-full focus-visible:outline-none">
-        <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-primary-hover via-primary to-gold sm:aspect-[5/3]">
+        <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-primary-hover via-primary to-accent sm:aspect-[16/9]">
           {desktopBanner ? (
             <picture className="block h-full w-full">
               {mobileBanner && <source media="(max-width: 639px)" srcSet={mobileBanner} />}
@@ -26,35 +26,47 @@ export function RestaurantCard({ restaurant }: { restaurant: PublicRestaurant })
                 src={desktopBanner}
                 alt={`Banner de ${restaurant.tradeName || restaurant.name}`}
                 loading="lazy"
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.045]"
               />
             </picture>
           ) : (
             <div className="absolute inset-0 grid place-items-center text-6xl font-black text-white/15">MF</div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/5" />
-          <span className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-[11px] font-black shadow-sm ${badge.style}`}>{badge.label}</span>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/5 to-transparent" />
+          <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+            <span className="inline-flex max-w-[70%] items-center gap-2 rounded-full bg-black/28 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.18em] text-white backdrop-blur-sm">
+              {restaurant.establishmentTypeName ?? legacyEstablishmentLabel(type)}
+            </span>
+            <span className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black shadow-sm ${badge.style}`}>{badge.label}</span>
+          </div>
         </div>
 
-        <div className="relative px-5 pb-5 pt-8 sm:px-6">
+        <div className="relative px-5 pb-5 pt-9 sm:px-6 sm:pb-6">
           {restaurant.logoUrl ? (
-            <span className="absolute -top-8 left-5 h-16 w-16 overflow-hidden rounded-2xl border-[4px] border-surface bg-white shadow-md sm:left-6 sm:h-[68px] sm:w-[68px]">
-              <Image src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} fill sizes="68px" className="object-cover" />
+            <span className="absolute -top-9 left-5 h-[74px] w-[74px] overflow-hidden rounded-[22px] border-[5px] border-white bg-white shadow-[0_12px_28px_rgba(41,37,36,.12)] sm:left-6">
+              <Image src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} fill sizes="74px" className="object-cover" />
             </span>
           ) : (
-            <span className="absolute -top-8 left-5 grid h-16 w-16 place-items-center rounded-2xl border-[4px] border-surface bg-primary text-xl font-black text-white shadow-md sm:left-6 sm:h-[68px] sm:w-[68px]">
+            <span className="absolute -top-9 left-5 grid h-[74px] w-[74px] place-items-center rounded-[22px] border-[5px] border-white bg-primary text-2xl font-black text-white shadow-[0_12px_28px_rgba(41,37,36,.12)] sm:left-6">
               {restaurant.name.charAt(0)}
             </span>
           )}
 
-          <p className="mt-1 text-[11px] font-black uppercase tracking-[.14em] text-accent">{restaurant.establishmentTypeName ?? legacyEstablishmentLabel(type)}</p>
-          <h3 className="mt-1.5 line-clamp-1 text-xl font-black tracking-tight text-stone-900">{restaurant.tradeName || restaurant.name}</h3>
-          {restaurant.restaurantCategories?.length ? <p className="mt-1 line-clamp-1 text-sm font-semibold text-stone-500">{restaurant.restaurantCategories.join(' • ')}</p> : null}
-          <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">{restaurant.description || `Conheça ${isRestaurant ? 'o cardápio' : 'os produtos'} deste estabelecimento.`}</p>
+          <div className="flex min-h-[168px] flex-col">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[.14em] text-accent">{restaurant.restaurantCategories?.length ? restaurant.restaurantCategories.slice(0, 2).join(' • ') : 'Destaque local'}</p>
+              <h3 className="mt-2 line-clamp-1 text-[22px] font-black tracking-tight text-stone-900">{restaurant.tradeName || restaurant.name}</h3>
+              <p className="mt-3 line-clamp-3 text-sm leading-6 text-stone-600">{restaurant.description || `Conheça ${isRestaurant ? 'o cardápio' : 'os produtos'} deste estabelecimento.`}</p>
+            </div>
 
-          <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
-            <span className="min-w-0 truncate text-sm font-semibold text-stone-500">{location || 'Localização não informada'}</span>
-            <span className="shrink-0 text-sm font-black text-primary">{isRestaurant ? 'Ver cardápio' : 'Ver produtos'} →</span>
+            <div className="mt-auto pt-5">
+              <div className="rounded-[22px] border border-border/80 bg-background/55 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-sm font-semibold text-stone-500">{location || 'Localização não informada'}</span>
+                  <span className="shrink-0 text-sm font-black text-primary">{isRestaurant ? 'Ver cardápio' : 'Ver produtos'} →</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </Link>
