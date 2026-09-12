@@ -1,1 +1,29 @@
-{"name":"Menu Flow","short_name":"Menu Flow","start_url":"/","display":"standalone","background_color":"#F8F5F0","theme_color":"#221C1A","description":"Cardápio digital rápido e fácil de usar.","icons":[{"src":"/assets/branding/menu-flow-icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/assets/branding/menu-flow-icon-512.png","sizes":"512x512","type":"image/png"}]}
+{
+  "id": "/",
+  "name": "Menu Flow",
+  "short_name": "Menu Flow",
+  "description": "Cardápios digitais, pedidos online e estabelecimentos em um só lugar.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F8F5F0",
+  "theme_color": "#221C1A",
+  "categories": ["food", "shopping", "business"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/assets/branding/menu-flow-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/branding/menu-flow-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
