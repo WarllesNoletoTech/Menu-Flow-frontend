@@ -121,13 +121,77 @@ export function findProductPreset(id?: string) {
   return id ? PRODUCT_OPTION_PRESETS.find((preset) => preset.id === id) : undefined;
 }
 
-export function catalogImportExample() {
-  return [
-    'Categoria;Produto;Descrição;Preço;Preço promocional;Modelo de opções;Disponível;Destaque;Grupos de opções',
-    'Hambúrgueres;X-Bacon;Pão, carne, queijo e bacon;25,00;;hamburguer;sim;sim;',
-    'Bebidas;Coca-Cola 350 ml;Lata gelada;6,00;;;sim;não;',
-    'Pizzas;Pizza Tradicional;Escolha o tamanho e os sabores;35,00;;pizza;sim;sim;',
-  ].join('\n');
+const IMPORT_HEADER = ['Categoria', 'Produto', 'Descrição', 'Preço', 'Preço promocional', 'Modelo de opções', 'Disponível', 'Destaque', 'Grupos de opções'];
+
+const CATALOG_IMPORT_EXAMPLES: Record<CatalogTemplateId, string[][]> = {
+  pizzaria: [
+    ['Pizzas', 'Monte sua Pizza', 'Escolha tamanho, até 2 sabores e borda. Em meio a meio prevalece o sabor mais caro.', '45,00', '', 'pizza', 'sim', 'sim', ''],
+    ['Pizzas doces', 'Pizza de Chocolate', 'Chocolate ao leite e granulado', '55,00', '', 'pizza', 'sim', 'não', ''],
+    ['Bebidas', 'Coca-Cola 2 Litros', 'Refrigerante 2L', '15,00', '', '', 'sim', 'não', ''],
+    ['Sobremesas', 'Petit gâteau', 'Bolo de chocolate com acompanhamento', '22,00', '', '', 'sim', 'não', ''],
+  ],
+  restaurante: [
+    ['Pratos do dia', 'Prato do Dia', 'Monte seu prato escolhendo proteína e acompanhamentos', '24,90', '', 'almoco', 'sim', 'sim', ''],
+    ['Executivos', 'Executivo de Bife', 'Bife acebolado com acompanhamentos', '29,90', '', 'almoco', 'sim', 'não', ''],
+    ['Porções', 'Batata Frita', 'Porção 400 g', '25,00', '', '', 'sim', 'não', ''],
+    ['Bebidas', 'Suco Natural', 'Escolha o tamanho da bebida', '7,00', '', 'bebida', 'sim', 'não', ''],
+    ['Sobremesas', 'Pudim', 'Fatia de pudim caseiro', '10,00', '', '', 'sim', 'não', ''],
+  ],
+  marmitaria: [
+    ['Marmitas', 'Monte sua Marmita', 'Escolha tamanho, proteína e acompanhamentos', '18,00', '', 'marmita', 'sim', 'sim', ''],
+    ['Combos', 'Marmita + Refrigerante', 'Marmita completa com bebida', '25,00', '', 'marmita', 'sim', 'não', ''],
+    ['Adicionais', 'Ovo Frito', 'Unidade', '3,00', '', '', 'sim', 'não', ''],
+    ['Bebidas', 'Refrigerante', 'Escolha o tamanho da bebida', '5,00', '', 'bebida', 'sim', 'não', ''],
+  ],
+  hamburgueria: [
+    ['Hambúrgueres', 'X-Bacon', 'Pão, carne, queijo e bacon', '25,00', '', 'hamburguer', 'sim', 'sim', ''],
+    ['Hambúrgueres', 'X-Salada', 'Pão, carne, queijo e salada', '22,00', '', 'hamburguer', 'sim', 'não', ''],
+    ['Combos', 'Combo X-Bacon', 'X-Bacon, batata e bebida', '35,00', '', 'hamburguer', 'sim', 'não', ''],
+    ['Porções', 'Batata Frita', 'Porção individual', '15,00', '', '', 'sim', 'não', ''],
+    ['Bebidas', 'Refrigerante', 'Escolha o tamanho da bebida', '6,00', '', 'bebida', 'sim', 'não', ''],
+    ['Sobremesas', 'Brownie', 'Brownie de chocolate', '12,00', '', '', 'sim', 'não', ''],
+  ],
+  acai: [
+    ['Açaí', 'Monte seu Açaí', 'Escolha tamanho, acompanhamentos grátis e adicionais premium', '14,00', '', 'acai', 'sim', 'sim', ''],
+    ['Cremes', 'Creme de Cupuaçu', 'Escolha tamanho e adicionais', '15,00', '', 'acai', 'sim', 'não', ''],
+    ['Sorvetes', 'Copo de Sorvete', 'Sorvete no copo', '10,00', '', '', 'sim', 'não', ''],
+    ['Adicionais', 'Morango Extra', 'Porção adicional', '4,00', '', '', 'sim', 'não', ''],
+    ['Bebidas', 'Água Mineral', 'Garrafa', '4,00', '', '', 'sim', 'não', ''],
+  ],
+  sushi: [
+    ['Combos', 'Combo 30 Peças', 'Monte seu combo de sushi', '69,90', '', 'sushi', 'sim', 'sim', ''],
+    ['Temakis', 'Temaki de Salmão', 'Salmão, arroz, cream cheese e cebolinha', '28,00', '', 'sushi', 'sim', 'não', ''],
+    ['Hot rolls', 'Hot Roll', 'Porção com 10 unidades', '24,00', '', '', 'sim', 'não', ''],
+    ['Sashimis', 'Sashimi de Salmão', 'Porção com 8 unidades', '32,00', '', '', 'sim', 'não', ''],
+    ['Bebidas', 'Refrigerante', 'Escolha o tamanho da bebida', '6,00', '', 'bebida', 'sim', 'não', ''],
+  ],
+  cafeteria: [
+    ['Cafés', 'Café com Leite', 'Café espresso com leite', '8,00', '', 'bebida', 'sim', 'sim', ''],
+    ['Bebidas', 'Chocolate Quente', 'Bebida cremosa de chocolate', '12,00', '', 'bebida', 'sim', 'não', ''],
+    ['Salgados', 'Coxinha', 'Coxinha de frango', '8,00', '', '', 'sim', 'não', ''],
+    ['Doces', 'Fatia de Bolo', 'Bolo do dia', '10,00', '', '', 'sim', 'não', ''],
+    ['Combos', 'Café + Salgado', 'Café pequeno com um salgado', '14,00', '', '', 'sim', 'não', ''],
+  ],
+  bar: [
+    ['Petiscos', 'Calabresa Acebolada', 'Porção de calabresa com cebola', '32,00', '', '', 'sim', 'sim', ''],
+    ['Porções', 'Batata Frita', 'Porção 500 g', '28,00', '', '', 'sim', 'não', ''],
+    ['Pratos', 'Isca de Frango', 'Porção de iscas de frango', '38,00', '', '', 'sim', 'não', ''],
+    ['Bebidas', 'Refrigerante', 'Escolha o tamanho da bebida', '6,00', '', 'bebida', 'sim', 'não', ''],
+    ['Combos', 'Combo Petisco + Bebida', 'Petisco acompanhado de bebida', '42,00', '', '', 'sim', 'não', ''],
+  ],
+};
+
+function csvCell(value: string) {
+  return /[;"\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+export function catalogImportExample(templateId: CatalogTemplateId = 'pizzaria') {
+  const rows = CATALOG_IMPORT_EXAMPLES[templateId] ?? CATALOG_IMPORT_EXAMPLES.pizzaria;
+  return [IMPORT_HEADER, ...rows].map((row) => row.map(csvCell).join(';')).join('\n');
+}
+
+export function catalogImportFileName(templateId: CatalogTemplateId) {
+  return `modelo-cardapio-${templateId}-menuflow.csv`;
 }
 
 function clean(value: string | undefined) { return (value ?? '').trim(); }

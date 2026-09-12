@@ -17,7 +17,7 @@ import {
 import { useEmpresa } from './EmpresaContext';
 import type { Category, Product } from './types';
 import { RequestSequencer } from '../../lib/request-sequencer';
-import { CATALOG_TEMPLATES, PRODUCT_OPTION_PRESETS, catalogImportExample, findProductPreset, parseCatalogImport, type CatalogImportRow } from '../../lib/catalog-presets';
+import { CATALOG_TEMPLATES, PRODUCT_OPTION_PRESETS, catalogImportExample, catalogImportFileName, findProductPreset, parseCatalogImport, type CatalogImportRow, type CatalogTemplateId } from '../../lib/catalog-presets';
 
 type CatalogContextValue = {
   request: <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -214,12 +214,12 @@ function SmartCatalogBuilder({ onGoProducts }: { onGoProducts: () => void }) {
     }
   }
 
-  function downloadExample() {
-    const blob = new Blob([`\uFEFF${catalogImportExample()}`], { type: 'text/csv;charset=utf-8' });
+  function downloadExample(downloadTemplateId: CatalogTemplateId = templateId) {
+    const blob = new Blob([`\uFEFF${catalogImportExample(downloadTemplateId)}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'modelo-importacao-cardapio-menuflow.csv';
+    anchor.download = catalogImportFileName(downloadTemplateId);
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 500);
   }
@@ -381,8 +381,23 @@ function SmartCatalogBuilder({ onGoProducts }: { onGoProducts: () => void }) {
             <p className="mt-1 max-w-3xl text-sm text-stone-500">Importe CSV/TXT ou cole o cardápio. O Menu Flow cria categorias automaticamente, ignora duplicados e pode aplicar modelos de opções em cada produto.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={downloadExample} className="rounded-xl border px-4 py-2.5 text-sm font-bold">Baixar planilha modelo</button>
+            <button type="button" onClick={() => downloadExample(templateId)} className="rounded-xl border bg-surface px-4 py-2.5 text-sm font-bold hover:bg-background">Baixar modelo {selectedTemplate.label}</button>
             <label className="cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-bold hover:bg-background">Selecionar CSV/TXT<input type="file" accept=".csv,.txt,text/csv,text/plain" className="sr-only" onChange={(event) => void readImportFile(event.target.files?.[0])} /></label>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl border bg-background/45 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div><p className="text-sm font-black">Planilhas modelo por tipo de cardápio</p><p className="text-xs text-stone-500">Todos os arquivos abaixo são CSV prontos para editar no Excel/Google Planilhas e importar de volta no Menu Flow.</p></div>
+            <span className="mt-2 w-fit rounded-full bg-surface px-2.5 py-1 text-[11px] font-black text-stone-500 sm:mt-0">{CATALOG_TEMPLATES.length} modelos disponíveis</span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {CATALOG_TEMPLATES.map((template) => (
+              <button key={`sheet-${template.id}`} type="button" onClick={() => downloadExample(template.id)} className="flex min-h-12 items-center gap-3 rounded-xl border bg-surface px-3 py-2 text-left transition hover:border-ink/30 hover:bg-white">
+                <span className="text-xl" aria-hidden="true">{template.icon}</span>
+                <span className="min-w-0"><b className="block truncate text-sm">{template.label}</b><span className="block text-[11px] text-stone-500">Baixar CSV modelo</span></span>
+              </button>
+            ))}
           </div>
         </div>
 
