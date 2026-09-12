@@ -15,11 +15,8 @@ export function Header(props: { cities: City[]; city: string; onCityChange: (val
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <Link href="/" className="flex min-w-0 items-center gap-3 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-white/90 shadow-sm sm:h-14 sm:w-14">
-                  <BrandLogo variant="symbol" priority className="h-9 w-9 sm:h-10 sm:w-10" />
-                </span>
                 <div className="min-w-0">
-                  <BrandLogo variant="wordmark" priority className="w-[clamp(8.8rem,20vw,11.8rem)] rounded-lg" />
+                  <BrandLogo variant="wordmark" priority className="w-[clamp(10rem,22vw,13rem)] rounded-lg" />
                   <p className="mt-1 hidden text-xs font-semibold text-stone-500 sm:block">Descubra cardápios, pedidos online e lojas perto de você.</p>
                 </div>
               </Link>
