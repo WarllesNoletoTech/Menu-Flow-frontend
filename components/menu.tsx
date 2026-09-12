@@ -300,7 +300,7 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
           <div className="relative order-2 flex flex-col justify-center p-5 sm:p-7 xl:order-1 xl:min-h-[420px] xl:p-10">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-success"><span className={`h-2 w-2 rounded-full ${restaurant.canAcceptOrdersNow ? 'bg-success' : 'bg-danger'}`} />{availability}</span>
-              <span className="inline-flex rounded-full border border-border bg-background/80 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-stone-500">{establishmentLabel}</span>
+              <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-emerald-800">{establishmentLabel}</span>
             </div>
 
             <div className="mt-5 flex items-start gap-4 sm:gap-5">
@@ -336,10 +336,6 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
                 <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-cover" />
               </picture>
               <div className="absolute inset-0 bg-gradient-to-tr from-black/45 via-black/5 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 rounded-[24px] border border-white/15 bg-black/25 p-4 text-white backdrop-blur-md sm:bottom-6 sm:left-6 sm:right-auto sm:max-w-[300px] sm:p-5">
-                <p className="text-lg font-black leading-tight sm:text-2xl">Sabor que cria experiências.</p>
-                <p className="mt-2 text-sm text-white/80">Escolha seus favoritos e finalize com praticidade no Menu Flow.</p>
-              </div>
             </> : <>
               <div className="absolute -right-10 -top-10 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
               <div className="absolute bottom-5 right-6 max-w-[250px] rounded-3xl border border-white/15 bg-black/15 p-5 text-right text-white backdrop-blur-sm sm:bottom-8 sm:right-8">

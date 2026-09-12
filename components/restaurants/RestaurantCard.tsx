@@ -34,7 +34,7 @@ export function RestaurantCard({ restaurant }: { restaurant: PublicRestaurant })
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/5 to-transparent" />
           <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
-            <span className="inline-flex max-w-[70%] items-center gap-2 rounded-full bg-black/28 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.18em] text-white backdrop-blur-sm">
+            <span className="inline-flex max-w-[70%] items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/95 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.18em] text-emerald-800 backdrop-blur-sm">
               {restaurant.establishmentTypeName ?? legacyEstablishmentLabel(type)}
             </span>
             <span className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black shadow-sm ${badge.style}`}>{badge.label}</span>
