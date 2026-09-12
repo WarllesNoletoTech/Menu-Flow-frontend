@@ -256,7 +256,7 @@ export function Menu({ slug }: { slug: string }) {
                     </div>
                     <a href="#topo-cardapio" className="hidden text-sm font-black text-ink hover:underline sm:inline">Topo ↑</a>
                   </div>
-                  <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+                  <div className="grid gap-4 xl:grid-cols-2">
                     {category.products.map((product) => <ProductCard key={product._id} product={product} open={restaurant.canAcceptOrdersNow} add={() => product.addonGroups?.length ? (setSelectedProduct(product), setSelectedAddons([])) : add(product)} />)}
                   </div>
                 </section>
@@ -387,22 +387,22 @@ function EmptyMenu() {
 
 function ProductCard({ product, open, add }: { product: Product; open: boolean; add: () => void }) {
   const hasPromotion = product.promotionalPrice != null && product.promotionalPrice < product.price;
-  return <article className={`group relative flex min-w-0 overflow-hidden rounded-[26px] border bg-white shadow-[0_14px_36px_rgba(41,37,36,.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(41,37,36,.11)] lg:flex-col ${product.featured ? 'border-accent/60 ring-1 ring-accent/15' : 'border-border/90'}`}>
-    <div className="relative h-32 w-32 shrink-0 overflow-hidden bg-stone-100 sm:h-36 sm:w-36 lg:aspect-[16/10] lg:h-auto lg:w-full">
+  return <article className={`group relative flex min-w-0 items-stretch gap-3 rounded-[30px] border bg-white p-3 shadow-[0_14px_32px_rgba(41,37,36,.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(41,37,36,.10)] ${product.featured ? 'border-accent/60 ring-1 ring-accent/15' : 'border-border/90'}`}>
+    <div className="relative h-[132px] w-[122px] shrink-0 overflow-hidden rounded-[24px] bg-stone-100 sm:h-[144px] sm:w-[132px] lg:h-[164px] lg:w-[160px]">
       {product.imageUrl ? <img src={product.imageUrl} alt={product.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" /> : <div className="grid h-full w-full place-items-center bg-gradient-to-br from-stone-100 via-white to-ink/10 text-3xl font-black text-ink/35" aria-label="Produto sem imagem">MF</div>}
-      {product.featured && <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-gold px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg">★ Destaque</div>}
-      {!open && <div className="absolute inset-0 grid place-items-center bg-black/45 p-3 text-center text-xs font-black uppercase tracking-wide text-white backdrop-blur-[1px]">Pedidos indisponíveis agora</div>}
+      {product.featured && <div className="absolute left-2.5 top-2.5 z-10 inline-flex items-center gap-1 rounded-full bg-gold px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-lg">★ Destaque</div>}
+      {!open && <div className="absolute inset-0 grid place-items-center bg-black/45 p-3 text-center text-[11px] font-black uppercase tracking-wide text-white backdrop-blur-[1px]">Pedidos indisponíveis agora</div>}
     </div>
-    <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
+    <div className="flex min-w-0 flex-1 flex-col py-1 pr-1">
       <div className="min-w-0">
-        <h3 className="break-words text-[17px] font-black leading-tight text-stone-900 sm:text-xl">{product.name}</h3>
+        <h3 className="break-words text-[18px] font-black leading-tight text-stone-900 sm:text-[22px]">{product.name}</h3>
         <p className="mt-2 line-clamp-2 text-sm leading-5 text-stone-500">{product.description || 'Confira este produto.'}</p>
       </div>
       <div className="mt-auto pt-4">
         {hasPromotion && <div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-danger/10 px-2 py-1 text-[9px] font-black uppercase tracking-[.08em] text-danger">Oferta</span><del className="text-xs font-bold text-stone-400 decoration-2">{money(product.price)}</del></div>}
-        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between lg:flex-row lg:items-end">
-          <b className="text-xl font-black tracking-tight text-ink">{money(product.promotionalPrice ?? product.price)}</b>
-          <button type="button" disabled={!open} onClick={add} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto lg:w-full"><span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-base leading-none">+</span>Adicionar</button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <b className="text-[1.75rem] font-black leading-none tracking-tight text-ink sm:text-[1.9rem]">{money(product.promotionalPrice ?? product.price)}</b>
+          <button type="button" disabled={!open} onClick={add} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[18px] bg-ink px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[170px]"><span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-base leading-none">+</span>Adicionar</button>
         </div>
       </div>
     </div>
