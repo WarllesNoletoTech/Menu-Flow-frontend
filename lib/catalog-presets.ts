@@ -1,7 +1,7 @@
 export type CatalogTemplateId = 'pizzaria' | 'restaurante' | 'marmitaria' | 'hamburgueria' | 'acai' | 'sushi' | 'cafeteria' | 'bar';
 
 export type PresetAddon = { name: string; price: number };
-export type PresetGroup = { name: string; required: boolean; min: number; max: number; addons: PresetAddon[] };
+export type PresetGroup = { name: string; required: boolean; min: number; max: number; pricingMode?: 'SUM' | 'MAX'; addons: PresetAddon[] };
 export type ProductOptionPreset = {
   id: string;
   label: string;
@@ -37,11 +37,11 @@ export type CatalogImportResult = { rows: CatalogImportRow[]; errors: string[] }
 export const PRODUCT_OPTION_PRESETS: ProductOptionPreset[] = [
   {
     id: 'pizza', label: 'Pizza', icon: '🍕',
-    description: 'Tamanho, até 2 sabores e bordas.',
-    hint: 'Use o preço do menor tamanho como preço base e ajuste os acréscimos dos tamanhos. Os sabores começam sem acréscimo e podem ser editados.',
+    description: 'Tamanho, até 2 sabores e bordas com cobrança pelo sabor mais caro.',
+    hint: 'Use o preço do menor tamanho como base. Nos sabores, informe o acréscimo de cada sabor: se o cliente escolher mais de um, o Menu Flow cobra somente o maior acréscimo.',
     groups: [
       { name: 'Tamanho', required: true, min: 1, max: 1, addons: [{ name: 'Pequena', price: 0 }, { name: 'Média', price: 10 }, { name: 'Grande', price: 20 }, { name: 'Família', price: 30 }] },
-      { name: 'Sabores', required: true, min: 1, max: 2, addons: [{ name: 'Calabresa', price: 0 }, { name: 'Frango com catupiry', price: 0 }, { name: 'Portuguesa', price: 0 }, { name: 'Marguerita', price: 0 }] },
+      { name: 'Sabores', required: true, min: 1, max: 2, pricingMode: 'MAX', addons: [{ name: 'Calabresa', price: 0 }, { name: 'Frango com catupiry', price: 0 }, { name: 'Portuguesa', price: 0 }, { name: 'Marguerita', price: 0 }] },
       { name: 'Borda', required: false, min: 0, max: 1, addons: [{ name: 'Borda de catupiry', price: 8 }, { name: 'Borda de cheddar', price: 8 }, { name: 'Borda de chocolate', price: 10 }] },
     ],
   },

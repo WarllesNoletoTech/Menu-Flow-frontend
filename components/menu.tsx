@@ -15,7 +15,7 @@ import { BrandLogo } from './BrandLogo';
 
 type Category = { _id: string; name: string };
 type Addon = { _id: string; name: string; price: number; priceCents?: number };
-type AddonGroup = { _id: string; name: string; required: boolean; min: number; max: number; addons: Addon[] };
+type AddonGroup = { _id: string; name: string; required: boolean; min: number; max: number; pricingMode?: 'SUM' | 'MAX'; addons: Addon[] };
 type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string | { _id?: string }; available?: boolean; featured?: boolean; addonGroups?: AddonGroup[] };
 type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;bannerDesktopUrl?:string;bannerMobileUrl?:string;logoUrl?:string;establishmentType?:string;establishmentTypeName?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;orderWhatsapp?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;deliveryAvailable:boolean;deliveryUnavailableReason?:string;minimumOrderCents:number;customerServiceFeeCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};acceptingOrders:boolean;canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;coverageType?:'ALL'|'SPECIFIC';fee:number;feeCents?:number;active?:boolean}>;paymentMethods:Array<{_id:string;name:string;method:string;active?:boolean}> };
 type CartItem = Product & { quantity: number; addonNames: string[] };
@@ -136,10 +136,12 @@ export function Menu({ slug }: { slug: string }) {
     setCheckout(true);
   };
 
-  const addonPrice = (product: Product, names: string[]) => (product.addonGroups ?? [])
-    .flatMap((group) => group.addons)
-    .filter((addon) => names.includes(addon.name))
-    .reduce((total, addon) => total + addon.price, 0);
+  const addonPrice = (product: Product, names: string[]) => (product.addonGroups ?? []).reduce((total, group) => {
+    const selected = group.addons.filter((addon) => names.includes(addon.name));
+    if (!selected.length) return total;
+    if (group.pricingMode === 'MAX') return total + Math.max(...selected.map((addon) => addon.price));
+    return total + selected.reduce((sum, addon) => sum + addon.price, 0);
+  }, 0);
   const subtotal = useMemo(() => cart.reduce((total, item) => total + ((item.promotionalPrice ?? item.price) + addonPrice(item, item.addonNames)) * item.quantity, 0), [cart]);
   const visibleCategories = useMemo(() => {
     const categoryIds = new Set(categories.map((category) => category._id));
@@ -440,7 +442,7 @@ function ModalFrame({ label, close, children, sheet = false }: { label: string; 
 }
 
 function ProductModal({ product, selected, toggle, close, canAdd, total, confirm }: { product: Product; selected: string[]; toggle: (group: AddonGroup, name: string) => void; close: () => void; canAdd: boolean; total: number; confirm: () => void }) {
-  return <ModalFrame label={`Personalizar ${product.name}`} close={close} sheet><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="break-words text-xl font-black sm:text-2xl">{product.name}</h2><p className="mt-1 text-sm text-stone-500">{product.description}</p></div><button type="button" aria-label="Fechar produto" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div>{(product.addonGroups ?? []).map((group) => <fieldset key={group.name} className="mt-5 border-t pt-4"><legend className="font-bold">{group.name} {group.required && <span className="text-danger">* obrigatório</span>}</legend><p className="mt-1 text-xs text-stone-500">Escolha de {group.min ?? (group.required ? 1 : 0)} a {group.max} opções</p>{group.addons.map((addon) => <label key={addon.name} className="mt-3 flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3"><span className="break-words"><input className="mr-3 h-5 w-5 align-middle accent-primary" type="checkbox" checked={selected.includes(addon.name)} onChange={() => toggle(group, addon.name)} />{addon.name}</span><b className="shrink-0 whitespace-nowrap">{addon.price > 0 ? `+ ${money(addon.price)}` : 'Grátis'}</b></label>)}</fieldset>)}<button type="button" disabled={!canAdd} onClick={confirm} className="sticky bottom-0 mt-6 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">ADICIONAR · {money(total)}</button></ModalFrame>;
+  return <ModalFrame label={`Personalizar ${product.name}`} close={close} sheet><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="break-words text-xl font-black sm:text-2xl">{product.name}</h2><p className="mt-1 text-sm text-stone-500">{product.description}</p></div><button type="button" aria-label="Fechar produto" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div>{(product.addonGroups ?? []).map((group) => <fieldset key={group.name} className="mt-5 border-t pt-4"><legend className="font-bold">{group.name} {group.required && <span className="text-danger">* obrigatório</span>}</legend><p className="mt-1 text-xs text-stone-500">Escolha de {group.min ?? (group.required ? 1 : 0)} a {group.max} opções{group.pricingMode === 'MAX' ? ' · se escolher mais de uma, será cobrada somente a mais cara' : ''}</p>{group.addons.map((addon) => <label key={addon.name} className="mt-3 flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3"><span className="break-words"><input className="mr-3 h-5 w-5 align-middle accent-primary" type="checkbox" checked={selected.includes(addon.name)} onChange={() => toggle(group, addon.name)} />{addon.name}</span><b className="shrink-0 whitespace-nowrap">{addon.price > 0 ? `+ ${money(addon.price)}` : 'Grátis'}</b></label>)}</fieldset>)}<button type="button" disabled={!canAdd} onClick={confirm} className="sticky bottom-0 mt-6 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">ADICIONAR · {money(total)}</button></ModalFrame>;
 }
 
 function CustomerAuthModal({mode,setMode,close,complete,wrongRole}:{mode:'welcome'|'login'|'register';setMode:(mode:'welcome'|'login'|'register')=>void;close:()=>void;complete:(session:AuthSession)=>void;wrongRole:boolean}) {
