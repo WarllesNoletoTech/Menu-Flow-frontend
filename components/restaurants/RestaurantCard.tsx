@@ -1,17 +1,63 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { legacyEstablishmentLabel, type PublicRestaurant } from '../../lib/public-restaurants';
+import type { PublicRestaurant } from '../../lib/public-restaurants';
+import { legacyEstablishmentLabel } from '../../lib/public-restaurants';
 
 export function RestaurantCard({ restaurant }: { restaurant: PublicRestaurant }) {
-  const type = restaurant.establishmentType ?? 'RESTAURANT';
+  const type = restaurant.establishmentType;
   const isRestaurant = type === 'RESTAURANT';
-  const badge = !restaurant.businessHoursConfigured || restaurant.openingStatus?.status === 'UNCONFIGURED'
-    ? { label: 'Horário não informado', style: 'bg-surface text-stone-600' }
-    : restaurant.canAcceptOrdersNow
-      ? { label: 'Aberto agora', style: 'bg-success text-white' }
-      : restaurant.openingStatus?.status === 'OPEN' && !restaurant.acceptingOrders
-        ? { label: 'Pedidos pausados', style: 'bg-gold text-ink' }
-      : { label: 'Fechado', style: 'bg-danger text-white' };
+  const badge = restaurant.isOpenNow
+    ? { label: 'Aberto agora', style: 'bg-success text-white' }
+    : restaurant.businessHoursConfigured
+      ? { label: 'Fechado', style: 'bg-white/95 text-stone-700' }
+      : { label: 'Horário não informado', style: 'bg-white/95 text-stone-700' };
+  const desktopBanner = restaurant.bannerDesktopUrl || restaurant.bannerUrl;
+  const mobileBanner = restaurant.bannerMobileUrl || desktopBanner;
+  const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
 
-  return <article className="group overflow-hidden rounded-3xl border border-border bg-surface shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-soft"><Link href={`/${restaurant.slug}`} className="block"><div className="relative h-40 overflow-hidden bg-gradient-to-br from-ink via-primary-hover to-gold">{restaurant.bannerUrl ? <Image src={restaurant.bannerUrl} alt="" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105" /> : <div className="absolute inset-0 grid place-items-center text-5xl font-black text-white/15">MF</div>}<span className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-black shadow ${badge.style}`}>{badge.label}</span></div><div className="relative p-5 pb-0 pt-7">{restaurant.logoUrl ? <span className="absolute -top-8 left-5 h-16 w-16 overflow-hidden rounded-2xl border-4 border-white bg-surface shadow"><Image src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} fill sizes="64px" className="object-cover" /></span> : <span className="absolute -top-8 left-5 grid h-16 w-16 place-items-center rounded-2xl border-4 border-white bg-lime text-xl font-black text-ink shadow">{restaurant.name.charAt(0)}</span>}<p className="mt-2 text-xs font-black uppercase tracking-wider text-accent">{restaurant.establishmentTypeName ?? legacyEstablishmentLabel(type)}</p><h3 className="mt-1 truncate text-xl font-black text-ink">{restaurant.tradeName || restaurant.name}</h3>{restaurant.restaurantCategories?.length ? <p className="mt-1 truncate text-sm font-semibold text-stone-500">{restaurant.restaurantCategories.join(' • ')}</p> : null}<p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">{restaurant.description || `Conheça ${isRestaurant ? 'o cardápio' : 'os produtos'} deste estabelecimento.`}</p><p className="mt-5 text-sm text-stone-500">{[restaurant.city, restaurant.state].filter(Boolean).join(' - ') || 'Localização não informada'}</p></div></Link><footer className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 border-t py-4">{restaurant.mapUrl ? <a href={restaurant.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-xl px-2 text-sm font-black text-accent">📍 Como chegar</a> : <span />}<Link href={`/${restaurant.slug}`} className="inline-flex min-h-11 items-center rounded-xl px-2 text-sm font-black text-ink">{isRestaurant ? 'Ver cardápio' : 'Ver produtos'} →</Link></footer></article>;
+  return (
+    <article className="group min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[0_8px_30px_rgba(41,37,36,.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(41,37,36,.11)]">
+      <Link href={`/${restaurant.slug}`} className="block h-full focus-visible:outline-none">
+        <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-primary-hover via-primary to-gold sm:aspect-[5/3]">
+          {desktopBanner ? (
+            <picture className="block h-full w-full">
+              {mobileBanner && <source media="(max-width: 639px)" srcSet={mobileBanner} />}
+              <img
+                src={desktopBanner}
+                alt={`Banner de ${restaurant.tradeName || restaurant.name}`}
+                loading="lazy"
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
+              />
+            </picture>
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-6xl font-black text-white/15">MF</div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/5" />
+          <span className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-[11px] font-black shadow-sm ${badge.style}`}>{badge.label}</span>
+        </div>
+
+        <div className="relative px-5 pb-5 pt-8 sm:px-6">
+          {restaurant.logoUrl ? (
+            <span className="absolute -top-8 left-5 h-16 w-16 overflow-hidden rounded-2xl border-[4px] border-surface bg-white shadow-md sm:left-6 sm:h-[68px] sm:w-[68px]">
+              <Image src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} fill sizes="68px" className="object-cover" />
+            </span>
+          ) : (
+            <span className="absolute -top-8 left-5 grid h-16 w-16 place-items-center rounded-2xl border-[4px] border-surface bg-primary text-xl font-black text-white shadow-md sm:left-6 sm:h-[68px] sm:w-[68px]">
+              {restaurant.name.charAt(0)}
+            </span>
+          )}
+
+          <p className="mt-1 text-[11px] font-black uppercase tracking-[.14em] text-accent">{restaurant.establishmentTypeName ?? legacyEstablishmentLabel(type)}</p>
+          <h3 className="mt-1.5 line-clamp-1 text-xl font-black tracking-tight text-stone-900">{restaurant.tradeName || restaurant.name}</h3>
+          {restaurant.restaurantCategories?.length ? <p className="mt-1 line-clamp-1 text-sm font-semibold text-stone-500">{restaurant.restaurantCategories.join(' • ')}</p> : null}
+          <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">{restaurant.description || `Conheça ${isRestaurant ? 'o cardápio' : 'os produtos'} deste estabelecimento.`}</p>
+
+          <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
+            <span className="min-w-0 truncate text-sm font-semibold text-stone-500">{location || 'Localização não informada'}</span>
+            <span className="shrink-0 text-sm font-black text-primary">{isRestaurant ? 'Ver cardápio' : 'Ver produtos'} →</span>
+          </div>
+        </div>
+      </Link>
+    </article>
+  );
 }

@@ -17,7 +17,7 @@ type Category = { _id: string; name: string };
 type Addon = { _id: string; name: string; price: number; priceCents?: number };
 type AddonGroup = { _id: string; name: string; required: boolean; min: number; max: number; addons: Addon[] };
 type Product = { _id: string; name: string; description?: string; imageUrl?: string; price: number; promotionalPrice?: number; categoryId?: string | { _id?: string }; available?: boolean; featured?: boolean; addonGroups?: AddonGroup[] };
-type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;logoUrl?:string;establishmentType?:string;establishmentTypeName?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;orderWhatsapp?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;deliveryAvailable:boolean;deliveryUnavailableReason?:string;minimumOrderCents:number;customerServiceFeeCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};acceptingOrders:boolean;canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;coverageType?:'ALL'|'SPECIFIC';fee:number;feeCents?:number;active?:boolean}>;paymentMethods:Array<{_id:string;name:string;method:string;active?:boolean}> };
+type Restaurant = { _id:string;name:string;tradeName?:string;description?:string;bannerUrl?:string;bannerDesktopUrl?:string;bannerMobileUrl?:string;logoUrl?:string;establishmentType?:string;establishmentTypeName?:string;city?:string;state?:string;timezone:string;address?:string;mapUrl?:string;orderWhatsapp?:string;pickupInstructions?:string;pickupEnabled:boolean;deliveryEnabled:boolean;deliveryAvailable:boolean;deliveryUnavailableReason?:string;minimumOrderCents:number;customerServiceFeeCents:number;businessHours:Array<{dayOfWeek:number;isOpen:boolean;periods:Array<{openTime:string;closeTime:string}>}>;openingStatus:{status:'OPEN'|'CLOSED'|'UNCONFIGURED';isOpen:boolean|null};acceptingOrders:boolean;canAcceptOrdersNow:boolean;deliveryZones:Array<{_id:string;name:string;coverageType?:'ALL'|'SPECIFIC';fee:number;feeCents?:number;active?:boolean}>;paymentMethods:Array<{_id:string;name:string;method:string;active?:boolean}> };
 type CartItem = Product & { quantity: number; addonNames: string[] };
 type StoredCartItem = { productId: string; quantity: number; addonNames: string[] };
 
@@ -309,9 +309,12 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
           </div>
 
           <div className="relative order-1 min-h-[210px] overflow-hidden bg-gradient-to-br from-ink via-primary-hover to-accent sm:min-h-[260px] lg:order-2 lg:min-h-[300px]">
-            {restaurant.bannerUrl ? <>
-              <img src={restaurant.bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl brightness-75" />
-              <img src={restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="relative h-full w-full object-cover" />
+            {(restaurant.bannerDesktopUrl || restaurant.bannerUrl) ? <>
+              <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl brightness-75" />
+              <picture className="relative block h-full w-full">
+                <source media="(max-width: 767px)" srcSet={restaurant.bannerMobileUrl || restaurant.bannerDesktopUrl || restaurant.bannerUrl} />
+                <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-cover" />
+              </picture>
               <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/5" />
             </> : <>
               <div className="absolute -right-10 -top-10 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
