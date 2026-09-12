@@ -176,7 +176,7 @@ export default function BannersPage() {
       <header className="mf-panel overflow-hidden rounded-[32px] px-5 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-primary">Home · Gestão visual</span>
+            <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-primary">Página inicial · Gestão visual</span>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-stone-900 sm:text-[2.3rem]">Banners da tela inicial</h1>
             <p className="mt-2 text-sm leading-6 text-stone-500 sm:text-base">Gerencie os banners do portal público com uma visualização mais clara de desktop, mobile, ordem de exibição e destino dos cliques.</p>
           </div>

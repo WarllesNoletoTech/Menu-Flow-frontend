@@ -17,6 +17,7 @@ export default function AdminPage() {
 
   const activeRate = useMemo(() => data?.total ? Math.round((data.active / data.total) * 100) : 0, [data]);
   const typeEntries = data ? Object.entries(data.types ?? {}).sort((a, b) => b[1] - a[1]) : [];
+  const typeLabel = (value: string) => ({ RESTAURANT: 'Restaurante', PHARMACY: 'Farmácia', CLOTHING: 'Vestuário', OTHER: 'Outros' } as Record<string, string>)[value] ?? value;
 
   return (
     <section>
@@ -60,7 +61,7 @@ export default function AdminPage() {
             {typeEntries.length ? typeEntries.map(([label, value]) => {
               const width = data?.total ? Math.max(6, Math.round((value / data.total) * 100)) : 0;
               return <div key={label}>
-                <div className="flex items-center justify-between gap-3 text-sm"><span className="font-bold text-stone-700">{label}</span><b>{value}</b></div>
+                <div className="flex items-center justify-between gap-3 text-sm"><span className="font-bold text-stone-700">{typeLabel(label)}</span><b>{value}</b></div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-background"><div className="h-full rounded-full bg-primary" style={{ width: `${width}%` }} /></div>
               </div>;
             }) : <div className="rounded-[22px] bg-background/70 px-5 py-8 text-center text-sm font-semibold text-stone-500">Nenhum tipo com dados disponíveis.</div>}
@@ -73,7 +74,7 @@ export default function AdminPage() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <QuickLink href="/admin/restaurantes" title="Estabelecimentos" description="Cadastros, situação e dados das lojas." />
             <QuickLink href="/admin/usuarios" title="Usuários" description="Contas e permissões da plataforma." />
-            <QuickLink href="/admin/banners" title="Banners da Home" description="Campanhas e comunicação visual." />
+            <QuickLink href="/admin/banners" title="Banners da página inicial" description="Campanhas e comunicação visual." />
             <QuickLink href="/admin/cobrancas" title="Cobranças" description="Mensalidades e acompanhamento financeiro." />
           </div>
         </article>

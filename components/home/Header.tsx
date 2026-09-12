@@ -9,9 +9,9 @@ import { SearchBar } from './SearchBar';
 
 export function Header(props: { cities: City[]; city: string; onCityChange: (value: string) => void; search: string; onSearchChange: (value: string) => void }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-2xl">
+    <header className="relative z-30 border-b border-border/60 bg-background/55">
       <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-        <div className="mf-panel overflow-hidden rounded-[28px] px-4 py-4 sm:px-5 lg:px-6">
+        <div className="mf-panel overflow-visible rounded-[28px] px-4 py-4 sm:px-5 lg:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <Link href="/" className="flex min-w-0 items-center gap-3 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">

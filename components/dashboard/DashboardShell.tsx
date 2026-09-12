@@ -32,7 +32,7 @@ export function DashboardShell({
 
   return (
     <DashboardProvider>
-      <div className="min-h-[100dvh] min-w-0 bg-[radial-gradient(circle_at_top_right,rgba(212,123,75,.10),transparent_26%),var(--mf-background)] lg:pl-[286px]">
+      <div className="min-h-[100dvh] min-w-0 bg-[radial-gradient(circle_at_top_right,rgba(212,123,75,.10),transparent_25%),radial-gradient(circle_at_bottom_left,rgba(120,47,49,.055),transparent_24%),var(--mf-background)] lg:pl-[286px]">
         <DashboardSidebar
           role={role}
           open={mobile}
@@ -43,7 +43,7 @@ export function DashboardShell({
           unreadBillingReports={unreadBillingReports}
         />
         <DashboardHeader role={role} open={mobile} toggle={() => setMobile((value) => !value)} establishment={establishment} />
-        <main className="min-w-0 px-4 py-5 sm:px-6 sm:py-7 xl:px-8 xl:py-8">
+        <main className="min-w-0 px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-5 xl:px-8 xl:pb-12">
           <div className="mx-auto w-full max-w-[1540px]">{children}</div>
         </main>
       </div>
@@ -84,31 +84,45 @@ function DashboardSidebar({
   const active = (href: string) =>
     href === '/' ? false : href === dashboardFor(role) ? pathname === href : pathname.startsWith(href);
 
+  const workspaceLabel = role === 'SUPER_ADMIN'
+    ? 'Central de gestão'
+    : role === 'CUSTOMER'
+      ? 'Área do cliente'
+      : 'Área da operação';
+  const workspaceDescription = role === 'SUPER_ADMIN'
+    ? 'Administre toda a plataforma Menu Flow.'
+    : role === 'CUSTOMER'
+      ? 'Pedidos, endereços e dados da sua conta.'
+      : 'Gerencie sua operação em um só lugar.';
+
   return (
     <>
       <button
         type="button"
         aria-label="Fechar menu"
-        className={`fixed inset-0 z-40 bg-stone-950/50 backdrop-blur-sm lg:hidden ${open ? 'block' : 'hidden'}`}
+        className={`fixed inset-0 z-40 bg-stone-950/55 backdrop-blur-sm lg:hidden ${open ? 'block' : 'hidden'}`}
         onClick={close}
       />
       <aside
         aria-label={`Navegação: ${panelNames[role]}`}
-        className={`fixed inset-y-0 left-0 z-50 flex w-[286px] max-w-[88vw] flex-col overflow-y-auto border-r border-white/5 bg-[linear-gradient(180deg,#211a18_0%,#191412_100%)] px-4 py-5 text-white shadow-[18px_0_55px_rgba(0,0,0,.18)] transition-transform lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[286px] max-w-[88vw] flex-col overflow-y-auto border-r border-white/5 bg-[linear-gradient(180deg,#211a18_0%,#171210_100%)] px-4 py-5 text-white shadow-[18px_0_55px_rgba(0,0,0,.18)] transition-transform lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="px-2">
           <Link href={dashboardFor(role)} onClick={close} aria-label="Menu Flow — início do painel" className="inline-flex rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
             <BrandLogo variant="wordmark" priority className="w-[178px]" />
           </Link>
 
-          <div className="mt-5 rounded-[22px] border border-white/10 bg-white/[.055] p-4 shadow-inner shadow-black/10">
-            <p className="text-[10px] font-black uppercase tracking-[.18em] text-accent">{role === 'SUPER_ADMIN' ? 'Central de gestão' : 'Workspace'}</p>
-            <p className="mt-1.5 truncate text-sm font-black text-white">{establishment?.name || panelNames[role]}</p>
-            <p className="mt-1 text-xs leading-5 text-stone-400">{role === 'SUPER_ADMIN' ? 'Administre a operação da plataforma.' : 'Gerencie sua operação em um só lugar.'}</p>
+          <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-white/[.055] p-4 shadow-inner shadow-black/10">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-accent">{workspaceLabel}</p>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,.08)]" />
+            </div>
+            <p className="mt-2 truncate text-sm font-black text-white">{establishment?.name || panelNames[role]}</p>
+            <p className="mt-1 text-xs leading-5 text-stone-400">{workspaceDescription}</p>
           </div>
         </div>
 
-        <div className="mt-6 px-3 text-[10px] font-black uppercase tracking-[.2em] text-stone-500">Navegação</div>
+        <div className="mt-6 px-3 text-[10px] font-black uppercase tracking-[.2em] text-stone-500">Menu principal</div>
         <nav className="mt-2 flex-1 space-y-1.5">
           {items.map((item) => {
             const badgeCount = item.label === 'Pedidos'
@@ -123,12 +137,12 @@ function DashboardSidebar({
 
             return (
               <Link
-                key={item.label}
+                key={`${item.label}-${item.href}`}
                 href={item.href}
                 onClick={close}
                 target={item.external ? '_blank' : undefined}
                 aria-current={isActive ? 'page' : undefined}
-                className={`group relative flex min-h-11 items-center gap-3 rounded-[15px] px-3 py-2.5 text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${isActive ? 'bg-white/[.105] text-white shadow-sm ring-1 ring-white/10' : 'text-stone-300 hover:bg-white/[.065] hover:text-white'}`}
+                className={`group relative flex min-h-11 items-center gap-3 rounded-[16px] px-3 py-2.5 text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${isActive ? 'bg-white/[.11] text-white shadow-sm ring-1 ring-white/10' : 'text-stone-300 hover:bg-white/[.065] hover:text-white'}`}
               >
                 <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition ${isActive ? 'bg-accent text-white shadow-sm' : 'bg-white/[.055] text-stone-400 group-hover:bg-white/[.09] group-hover:text-accent'}`} aria-hidden>
                   <NavigationIcon label={item.label} fallback={item.icon} />
@@ -148,7 +162,7 @@ function DashboardSidebar({
           <button
             type="button"
             onClick={() => { logout(); router.replace('/'); }}
-            className="group flex min-h-11 w-full items-center gap-3 rounded-[15px] px-3 text-sm font-bold text-stone-300 hover:bg-danger/10 hover:text-white"
+            className="group flex min-h-11 w-full items-center gap-3 rounded-[16px] px-3 text-sm font-bold text-stone-300 transition hover:bg-danger/10 hover:text-white"
           >
             <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-white/[.055] text-stone-400 group-hover:bg-danger/15 group-hover:text-red-300" aria-hidden>⇥</span>
             Sair
@@ -196,14 +210,23 @@ function DashboardHeader({
   const title = items
     .filter((item) => !item.external && (item.href === dashboardFor(role) ? pathname === item.href : pathname.startsWith(item.href)))
     .sort((a, b) => b.href.length - a.href.length)[0]?.label || panelNames[role];
-  const publicLabel = role === 'SUPER_ADMIN' ? 'Portal público' : role === 'CUSTOMER' ? 'Explorar lojas' : 'Ver loja';
+  const publicLabel = role === 'SUPER_ADMIN' ? 'Abrir portal público' : role === 'CUSTOMER' ? 'Explorar estabelecimentos' : 'Abrir minha loja';
   const account = `${dashboardFor(role)}/conta`;
+  const initial = user.name?.trim().charAt(0).toUpperCase() || 'U';
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/75 bg-background/80 backdrop-blur-2xl">
-      <div className="mx-auto flex min-h-[78px] w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 xl:px-8">
+    <header className="relative z-30 border-b border-border/70 bg-surface/55">
+      <div className="mx-auto flex min-h-[86px] w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 xl:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <button type="button" aria-label={open ? 'Fechar menu' : 'Abrir menu'} aria-expanded={open} onClick={toggle} className="grid h-11 w-11 place-items-center rounded-[14px] border border-border bg-white shadow-sm lg:hidden">☰</button>
+          <button
+            type="button"
+            aria-label={open ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={open}
+            onClick={toggle}
+            className="grid h-11 w-11 place-items-center rounded-[15px] border border-border bg-white text-lg text-stone-700 shadow-sm lg:hidden"
+          >
+            ☰
+          </button>
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.18em] text-stone-400">
               <span>{panelNames[role]}</span>
@@ -216,40 +239,75 @@ function DashboardHeader({
 
         <div className="flex items-center gap-2 sm:gap-3">
           {role === 'RESTAURANT_ADMIN' && establishment?.slug && (
-            <Link href={`/${establishment.slug}`} className="hidden min-h-10 items-center gap-2 rounded-[14px] border border-border bg-white px-4 text-sm font-black text-stone-700 shadow-sm transition hover:border-primary/20 hover:bg-primary/5 md:inline-flex">
+            <Link href={`/${establishment.slug}`} className="hidden min-h-11 items-center gap-2 rounded-[16px] border border-border bg-white px-4 text-sm font-black text-stone-700 shadow-sm transition hover:border-primary/20 hover:bg-primary/5 md:inline-flex">
               Ver loja <span aria-hidden>↗</span>
             </Link>
           )}
           {role === 'SUPER_ADMIN' && (
-            <Link href="/" className="hidden min-h-10 items-center gap-2 rounded-[14px] border border-border bg-white px-4 text-sm font-black text-stone-700 shadow-sm transition hover:border-primary/20 hover:bg-primary/5 md:inline-flex">
+            <Link href="/" className="hidden min-h-11 items-center gap-2 rounded-[16px] border border-border bg-white px-4 text-sm font-black text-stone-700 shadow-sm transition hover:border-primary/20 hover:bg-primary/5 md:inline-flex">
               Portal público <span aria-hidden>↗</span>
             </Link>
           )}
 
           <div className="relative" ref={ref}>
-            <button type="button" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)} className="flex min-h-11 items-center gap-2 rounded-[16px] border border-transparent px-2 py-1.5 text-left hover:border-border hover:bg-white hover:shadow-sm sm:gap-3 sm:px-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-primary text-sm font-black text-white shadow-sm">{user.name.charAt(0).toUpperCase()}</span>
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menu}
+              onClick={() => setMenu(!menu)}
+              className="group flex min-h-12 items-center gap-2 rounded-[18px] border border-border/90 bg-white px-2.5 py-1.5 text-left shadow-[0_8px_24px_rgba(41,37,36,.06)] transition hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-[0_12px_28px_rgba(41,37,36,.10)] sm:gap-3 sm:px-3"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-[linear-gradient(135deg,var(--mf-primary),#a65245)] text-sm font-black text-white shadow-sm">{initial}</span>
               <span className="hidden max-w-48 sm:block">
                 <strong className="block truncate text-sm text-stone-900">{user.name}</strong>
                 <small className="mt-0.5 block truncate text-[11px] font-semibold text-stone-500">{roleLabel[user.role]}</small>
               </span>
-              <span className="text-stone-400" aria-hidden>⌄</span>
+              <span className={`grid h-7 w-7 place-items-center rounded-lg bg-background text-xs text-stone-500 transition ${menu ? 'rotate-180' : ''}`} aria-hidden>⌄</span>
             </button>
+
             {menu && (
-              <div role="menu" className="absolute right-0 z-40 mt-2 w-60 max-w-[calc(100vw-2rem)] rounded-[22px] border border-border bg-white p-2.5 shadow-[0_22px_60px_rgba(41,37,36,.16)]">
-                <div className="mb-2 border-b border-border px-3 pb-3 pt-2 sm:hidden">
-                  <b className="block truncate text-sm">{user.name}</b>
-                  <span className="mt-1 block text-xs text-stone-500">{roleLabel[user.role]}</span>
+              <div role="menu" className="absolute right-0 z-40 mt-2 w-[290px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[24px] border border-border bg-white shadow-[0_24px_70px_rgba(41,37,36,.18)]">
+                <div className="border-b border-border bg-[linear-gradient(135deg,rgba(120,47,49,.08),rgba(212,123,75,.05))] p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary text-sm font-black text-white shadow-sm">{initial}</span>
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm text-stone-900">{user.name}</b>
+                      <span className="mt-0.5 block truncate text-xs font-semibold text-stone-500">{user.email || roleLabel[user.role]}</span>
+                    </div>
+                  </div>
+                  <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-primary shadow-sm">{roleLabel[user.role]}</span>
                 </div>
-                <Link role="menuitem" href={account} onClick={() => setMenu(false)} className="block rounded-[14px] px-4 py-3 text-sm font-bold text-stone-700 hover:bg-background">Minha conta</Link>
-                <Link role="menuitem" href={establishment?.slug ? `/${establishment.slug}` : '/'} onClick={() => setMenu(false)} className="block rounded-[14px] px-4 py-3 text-sm font-bold text-stone-700 hover:bg-background">{publicLabel}</Link>
-                <button type="button" role="menuitem" onClick={() => { logout(); router.replace('/'); }} className="w-full rounded-[14px] px-4 py-3 text-left text-sm font-bold text-danger hover:bg-danger/10">Sair</button>
+
+                <div className="p-2.5">
+                  <MenuItem href={account} onClick={() => setMenu(false)} icon="user">Minha conta</MenuItem>
+                  <MenuItem href={establishment?.slug ? `/${establishment.slug}` : '/'} onClick={() => setMenu(false)} icon="external">{publicLabel}</MenuItem>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { logout(); router.replace('/'); }}
+                    className="mt-1 flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-sm font-black text-danger transition hover:bg-danger/10"
+                  >
+                    <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-danger/10" aria-hidden>⇥</span>
+                    Sair da conta
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
     </header>
+  );
+}
+
+function MenuItem({ href, onClick, icon, children }: { href: string; onClick: () => void; icon: 'user' | 'external'; children: ReactNode }) {
+  return (
+    <Link role="menuitem" href={href} onClick={onClick} className="flex items-center gap-3 rounded-[16px] px-3 py-3 text-sm font-black text-stone-700 transition hover:bg-background">
+      <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-background text-stone-500" aria-hidden>
+        {icon === 'external' ? '↗' : '◯'}
+      </span>
+      <span>{children}</span>
+    </Link>
   );
 }
 

@@ -250,14 +250,25 @@ Cardápios mais simples, clientes mais felizes.`);
   }
   const monthlyCents =
     Math.round(Number(monthlyValue.replace(",", ".")) * 100) || 0;
+  const paidCount = items.filter((item) => item.status === "PAID").length;
+  const pendingCount = items.filter((item) => item.status === "GENERATED" || item.status === "DRAFT").length;
+  const reportsTotal = items.reduce((total, item) => total + item.totalCents, 0);
   return (
-    <section className="mx-auto max-w-7xl">
-      <h1 className="text-3xl font-black">Relatórios de serviço</h1>
-      <p className="mt-2 text-stone-500">
-        Mensalidade manual e repasse das taxas cobradas dos clientes nos pedidos concluídos.
-      </p>
-      <section className="mt-6 rounded-2xl bg-surface p-5 shadow-soft">
-        <h2 className="text-xl font-black">Dados para pagamento</h2>
+    <section className="mx-auto max-w-7xl space-y-6">
+      <header className="mf-panel rounded-[32px] px-5 py-6 sm:px-6 lg:px-8">
+        <div className="max-w-3xl">
+          <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-primary">Financeiro da plataforma</span>
+          <h1 className="mt-3 text-3xl font-black tracking-tight text-stone-900 sm:text-[2.35rem]">Cobranças e relatórios de serviço</h1>
+          <p className="mt-2 text-sm leading-6 text-stone-500 sm:text-base">Gerencie os dados de pagamento, gere relatórios de cobrança e acompanhe o histórico de mensalidades e taxas de serviço do Menu Flow.</p>
+        </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <SummaryCard label="Relatórios emitidos" value={String(items.length)} />
+          <SummaryCard label="Pagos" value={String(paidCount)} tone="success" />
+          <SummaryCard label="Pendentes" value={String(pendingCount)} tone="warning" helper={money(reportsTotal)} />
+        </div>
+      </header>
+      <section className="rounded-[30px] border border-border/90 bg-white p-5 shadow-[0_14px_36px_rgba(41,37,36,.05)] sm:p-6">
+        <div className="border-b border-border pb-4"><span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-accent">Pagamento</span><h2 className="mt-3 text-xl font-black tracking-tight text-stone-900">Dados para pagamento via PIX</h2><p className="mt-1 text-sm text-stone-500">Esses dados serão registrados nos novos relatórios emitidos.</p></div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Nome do recebedor">
             <input
@@ -279,14 +290,14 @@ Cardápios mais simples, clientes mais felizes.`);
           </Field>
         </div>
         <button
-          className="mt-4 rounded-xl bg-ink px-5 py-3 font-black text-white"
+          className="mt-5 min-h-11 rounded-2xl bg-ink px-5 py-3 text-sm font-black text-white shadow-sm"
           onClick={() => void saveSettings()}
         >
-          SALVAR DADOS PIX
+          Salvar dados PIX
         </button>
       </section>
-      <section className="mt-6 rounded-2xl bg-surface p-5 shadow-soft">
-        <h2 className="text-xl font-black">Gerar relatório</h2>
+      <section className="rounded-[30px] border border-border/90 bg-white p-5 shadow-[0_14px_36px_rgba(41,37,36,.05)] sm:p-6">
+        <div className="border-b border-border pb-4"><span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-primary">Novo relatório</span><h2 className="mt-3 text-xl font-black tracking-tight text-stone-900">Gerar relatório de serviço</h2><p className="mt-1 text-sm text-stone-500">Selecione a empresa e o período que será consolidado.</p></div>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <Field label="Empresa">
             <select
@@ -322,12 +333,12 @@ Cardápios mais simples, clientes mais felizes.`);
         <button
           disabled={!restaurantId || !start || !end}
           onClick={() => void calculate()}
-          className="mt-4 rounded-xl border px-5 py-3 font-bold disabled:opacity-40"
+          className="mt-5 min-h-11 rounded-2xl border border-border bg-white px-5 py-3 text-sm font-black text-stone-700 shadow-sm disabled:opacity-40"
         >
-          CALCULAR PRÉVIA
+          Calcular prévia
         </button>
         {preview && (
-          <div className="mt-5 rounded-2xl bg-background p-5">
+          <div className="mt-5 rounded-[24px] border border-border bg-background/55 p-5">
             <h3 className="font-black">Prévia — {preview.restaurant.name}</h3>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <p>
@@ -379,36 +390,36 @@ Cardápios mais simples, clientes mais felizes.`);
                 (monthly && monthlyCents <= 0)
               }
               onClick={() => void generate()}
-              className="mt-4 rounded-xl bg-ink px-6 py-3 font-black text-white disabled:opacity-40"
+              className="mt-4 min-h-11 rounded-2xl bg-ink px-6 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
             >
-              {busy ? "GERANDO…" : "GERAR RELATÓRIO"}
+              {busy ? "Gerando…" : "Gerar relatório"}
             </button>
           </div>
         )}
       </section>
-      {message && <p className="mt-4 rounded-xl bg-surface p-4">{message}</p>}
+      {message && <p className="rounded-[22px] border border-border bg-surface px-4 py-3 text-sm font-semibold text-stone-700">{message}</p>}
       {error && (
-        <p role="alert" className="mt-4 bg-danger/10 p-4 text-danger">
+        <p role="alert" className="rounded-[22px] border border-danger/20 bg-danger/10 p-4 text-sm font-semibold text-danger">
           {error}
         </p>
       )}
-      <h2 className="mt-8 text-xl font-black">Histórico</h2>
-      <div className="mt-3 overflow-x-auto rounded-2xl bg-surface">
+      <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-end sm:justify-between"><div><span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-accent">Histórico financeiro</span><h2 className="mt-3 text-2xl font-black tracking-tight text-stone-900">Relatórios emitidos</h2></div><span className="text-sm font-semibold text-stone-500">{items.length} {items.length === 1 ? "relatório" : "relatórios"}</span></div>
+      <div className="overflow-x-auto rounded-[30px] border border-border/90 bg-white shadow-[0_14px_36px_rgba(41,37,36,.05)]">
         <table className="w-full min-w-[1050px]">
-          <thead>
+          <thead className="bg-background/70">
             <tr>
               {[
                 "Relatório",
                 "Empresa",
                 "Período",
                 "Pedidos",
-                "Taxa de desenvolvimento",
+                "Taxa de serviço Menu Flow",
                 "Mensalidade",
                 "Total",
                 "Status",
                 "Ações",
               ].map((x) => (
-                <th className="p-4 text-left" key={x}>
+                <th className="p-4 text-left text-[11px] font-black uppercase tracking-[.1em] text-stone-500" key={x}>
                   {x}
                 </th>
               ))}
@@ -416,7 +427,7 @@ Cardápios mais simples, clientes mais felizes.`);
           </thead>
           <tbody>
             {items.map((r) => (
-              <tr className="border-t" key={r._id}>
+              <tr className="border-t border-border transition hover:bg-background/35" key={r._id}>
                 <td className="p-4 font-bold">{r.reportNumber}</td>
                 <td className="p-4">
                   {r.restaurantId.tradeName || r.restaurantId.name}
@@ -464,7 +475,7 @@ Cardápios mais simples, clientes mais felizes.`);
           title="Confirmar pagamento"
           report={paying}
           text="Confirma que este relatório foi pago?"
-          confirm="CONFIRMAR PAGAMENTO"
+          confirm="Confirmar pagamento"
           busy={busy}
           close={() => setPaying(undefined)}
           action={pay}
@@ -475,7 +486,7 @@ Cardápios mais simples, clientes mais felizes.`);
           title="Excluir relatório?"
           report={deleting}
           text="Os pedidos vinculados a este relatório voltarão a ficar disponíveis para uma nova cobrança."
-          confirm="EXCLUIR RELATÓRIO"
+          confirm="Excluir relatório"
           busy={busy}
           close={() => setDeleting(undefined)}
           action={remove}
@@ -484,11 +495,16 @@ Cardápios mais simples, clientes mais felizes.`);
     </section>
   );
 }
+function SummaryCard({ label, value, tone = "primary", helper }: { label: string; value: string; tone?: "primary" | "success" | "warning"; helper?: string }) {
+  const toneClass = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/10 text-warning" : "bg-primary/10 text-primary";
+  return <article className="rounded-[24px] border border-border/90 bg-white p-5 shadow-[0_12px_30px_rgba(41,37,36,.05)]"><div className="flex items-start justify-between gap-3"><p className="text-sm font-bold text-stone-500">{label}</p><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[.14em] ${toneClass}`}>Resumo</span></div><strong className="mt-3 block text-[30px] font-black tracking-tight text-stone-900">{value}</strong>{helper && <p className="mt-1 text-xs font-semibold text-stone-400">Total emitido: {helper}</p>}</article>;
+}
+
 function Help() {
   return (
     <details className="relative inline-block">
       <summary
-        aria-label="Sobre a taxa de desenvolvimento"
+        aria-label="Sobre a taxa de serviço Menu Flow"
         className="cursor-pointer list-none rounded-full border px-1 text-xs"
       >
         ?
@@ -507,7 +523,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="mt-3 block font-bold">
+    <label className="mt-3 block font-bold text-stone-800">
       {label}
       {children}
     </label>
@@ -531,14 +547,14 @@ function Modal({
   action: () => Promise<void>;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/60 p-4 backdrop-blur-sm">
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg rounded-2xl bg-surface p-6"
+        className="w-full max-w-lg rounded-[30px] border border-white/10 bg-surface p-6 shadow-2xl"
       >
-        <h2 className="text-xl font-black">{title}</h2>
-        <dl className="mt-4 grid grid-cols-2 gap-2">
+        <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-primary">Cobrança</span><h2 className="mt-3 text-2xl font-black tracking-tight text-stone-900">{title}</h2>
+        <dl className="mt-5 grid grid-cols-2 gap-3 rounded-[22px] border border-border bg-background/55 p-4 text-sm">
           <dt>Relatório:</dt>
           <dd className="font-bold">{report.reportNumber}</dd>
           <dt>Empresa:</dt>
@@ -550,18 +566,18 @@ function Modal({
           <dt>Total:</dt>
           <dd className="font-black">{money(report.totalCents)}</dd>
         </dl>
-        <p className="mt-4 rounded-xl bg-warning/10 p-3 font-bold">{text}</p>
-        <div className="mt-5 flex justify-end gap-3">
+        <p className="mt-4 rounded-[20px] border border-warning/20 bg-warning/10 p-4 text-sm font-bold text-stone-700">{text}</p>
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             disabled={busy}
-            className="rounded-xl border px-5 py-3 font-bold"
+            className="min-h-11 rounded-2xl border border-border bg-white px-5 py-3 text-sm font-black text-stone-700"
             onClick={close}
           >
-            VOLTAR
+            Voltar
           </button>
           <button
             disabled={busy}
-            className="rounded-xl bg-ink px-5 py-3 font-bold text-white"
+            className="min-h-11 rounded-2xl bg-ink px-5 py-3 text-sm font-black text-white shadow-sm"
             onClick={() => void action()}
           >
             {confirm}
