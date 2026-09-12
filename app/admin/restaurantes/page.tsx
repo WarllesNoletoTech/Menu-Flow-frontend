@@ -72,6 +72,18 @@ const blankRestaurant: RestaurantForm = {
 };
 const blankUser: UserForm = { name: '', email: '', phone: '', reportWhatsapp: '', active: true, password: '', confirmPassword: '' };
 
+
+function normalizeSlug(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+}
+
 export default function AdminRestaurantsPage() {
   const router = useRouter();
   const [items, setItems] = useState<Restaurant[]>([]);
@@ -216,6 +228,14 @@ export default function AdminRestaurantsPage() {
     setSubmitting(true);
     setFormError('');
     setMessage('');
+    const normalizedSlug = normalizeSlug(form.slug || form.name);
+    if (!normalizedSlug) {
+      setFormError('Informe um nome válido para gerar o endereço público da loja.');
+      setSubmitting(false);
+      return;
+    }
+    const establishmentForm = { ...form, slug: normalizedSlug };
+    if (form.slug !== normalizedSlug) setForm(establishmentForm);
     const owner = {
       name: ownerForm.name,
       email: ownerForm.email,
@@ -226,10 +246,10 @@ export default function AdminRestaurantsPage() {
     };
     try {
       if (editing) {
-        await request(`/restaurants/${editing}/with-owner`, { method: 'PATCH', body: JSON.stringify({ establishment: form, ...(editingOwnerId ? { owner: { userId: editingOwnerId, ...owner } } : {}) }) });
+        await request(`/restaurants/${editing}/with-owner`, { method: 'PATCH', body: JSON.stringify({ establishment: establishmentForm, ...(editingOwnerId ? { owner: { userId: editingOwnerId, ...owner } } : {}) }) });
         setMessage(editingOwnerId ? 'Lojista atualizado com sucesso. Estabelecimento salvo com sucesso.' : 'Estabelecimento salvo com sucesso.');
       } else {
-        await request('/restaurants/with-admin', { method: 'POST', body: JSON.stringify({ establishment: form, owner: { name: ownerForm.name, email: ownerForm.email, phone: ownerForm.phone, reportWhatsapp: ownerForm.reportWhatsapp, password: ownerForm.password } }) });
+        await request('/restaurants/with-admin', { method: 'POST', body: JSON.stringify({ establishment: establishmentForm, owner: { name: ownerForm.name, email: ownerForm.email, phone: ownerForm.phone, reportWhatsapp: ownerForm.reportWhatsapp, password: ownerForm.password } }) });
         setMessage('Estabelecimento salvo com sucesso.');
       }
       setShowForm(false);
@@ -451,12 +471,22 @@ export default function AdminRestaurantsPage() {
                     <input
                       required={key === 'name' || key === 'slug'}
                       pattern={key === 'slug' ? '[a-z0-9-]+' : undefined}
+                      title={key === 'slug' ? 'Gerado automaticamente: use apenas letras minúsculas, números e hífen.' : undefined}
                       type={key === 'email' ? 'email' : 'text'}
                       className="field"
                       value={String(form[key])}
                       onChange={(event) => {
-                        setForm({ ...form, [key]: event.target.value });
-                        if (key === 'email' && sameEmail) setOwnerForm({ ...ownerForm, email: event.target.value });
+                        const value = event.target.value;
+                        if (key === 'name') {
+                          const previousAutoSlug = normalizeSlug(form.name);
+                          const nextSlug = !editing && (!form.slug || form.slug === previousAutoSlug) ? normalizeSlug(value) : form.slug;
+                          setForm({ ...form, name: value, slug: nextSlug });
+                        } else if (key === 'slug') {
+                          setForm({ ...form, slug: normalizeSlug(value) });
+                        } else {
+                          setForm({ ...form, [key]: value });
+                        }
+                        if (key === 'email' && sameEmail) setOwnerForm({ ...ownerForm, email: value });
                       }}
                     />
                   </label>

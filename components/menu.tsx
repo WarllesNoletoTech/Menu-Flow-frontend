@@ -286,78 +286,86 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
   const establishmentLabel = restaurant.establishmentTypeName ?? legacyEstablishmentLabel(restaurant.establishmentType);
   const availability = restaurant.canAcceptOrdersNow ? 'Aberto agora' : restaurant.openingStatus.status === 'UNCONFIGURED' ? 'Horário não informado' : restaurant.openingStatus.status === 'OPEN' && !restaurant.acceptingOrders ? 'Pedidos pausados' : 'Fechado';
   const serviceLabel = restaurant.deliveryEnabled && restaurant.pickupEnabled ? 'Entrega e retirada' : restaurant.deliveryEnabled ? 'Entrega disponível' : 'Retirada no local';
+  const desktopBanner = restaurant.bannerDesktopUrl || restaurant.bannerUrl;
+  const mobileBanner = restaurant.bannerMobileUrl || desktopBanner;
 
-  return <header id="topo-cardapio" className="pb-5 pt-3 sm:pt-4">
+  return <header id="topo-cardapio" className="pb-3 pt-2 sm:pb-4 sm:pt-3">
     <div className="mx-auto flex min-h-16 w-full max-w-[1480px] items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
-      <Link href="/" aria-label="Voltar para a página inicial do Menu Flow" className="shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
-        <BrandLogo variant="wordmark" priority className="h-9 w-auto bg-transparent sm:h-11 [&_img]:h-full [&_img]:w-auto" />
+      <Link href="/" aria-label="Voltar para a página inicial do Menu Flow" className="shrink-0 rounded-xl px-1 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
+        <BrandLogo variant="wordmark" priority className="h-8 w-auto bg-transparent sm:h-10 [&_img]:h-full [&_img]:w-auto" />
       </Link>
       <UserMenu returnTo={`/${slug}`} />
     </div>
 
     <div className="mx-auto w-full max-w-[1480px] px-4 sm:px-6 lg:px-8">
-      <section className="relative overflow-hidden rounded-[30px] border border-border/90 bg-white shadow-[0_20px_65px_rgba(41,37,36,.10)] sm:rounded-[36px]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-accent/10 to-transparent" />
-        <div className="grid xl:grid-cols-[minmax(0,.88fr)_minmax(0,1.12fr)]">
-          <div className="relative order-2 flex flex-col justify-center p-5 sm:p-7 xl:order-1 xl:min-h-[420px] xl:p-10">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-success"><span className={`h-2 w-2 rounded-full ${restaurant.canAcceptOrdersNow ? 'bg-success' : 'bg-danger'}`} />{availability}</span>
-              <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[.18em] text-emerald-800">{establishmentLabel}</span>
+      <section className="overflow-hidden rounded-[28px] border border-border/80 bg-white shadow-[0_26px_80px_rgba(41,37,36,.10)] sm:rounded-[36px]">
+        <div className="relative isolate overflow-hidden bg-[#201815] aspect-[4/5] md:aspect-[8/3]">
+          {desktopBanner ? <>
+            <img src={desktopBanner} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-55 blur-2xl saturate-125" />
+            <div className="absolute inset-0 bg-black/20" />
+            <picture className="absolute inset-0 z-10 block h-full w-full">
+              <source media="(max-width: 767px)" srcSet={mobileBanner} />
+              <img src={desktopBanner} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-contain" />
+            </picture>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-24 bg-gradient-to-t from-black/25 to-transparent md:h-28" />
+          </> : <>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(212,123,75,.32),transparent_32%),radial-gradient(circle_at_78%_30%,rgba(200,157,95,.25),transparent_28%),linear-gradient(135deg,#2f2020,#6f2d2f_58%,#9a4b37)]" />
+            <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:34px_34px]" />
+            <div className="absolute bottom-8 left-6 right-6 z-10 max-w-xl text-white sm:bottom-10 sm:left-10">
+              <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.18em] backdrop-blur">{establishmentLabel}</span>
+              <p className="mt-4 text-3xl font-black leading-tight sm:text-4xl">Sabor, cuidado e praticidade em cada pedido.</p>
+              <p className="mt-2 max-w-lg text-sm text-white/75 sm:text-base">Escolha seus favoritos e peça em poucos passos.</p>
             </div>
+          </>}
+        </div>
 
-            <div className="mt-5 flex items-start gap-4 sm:gap-5">
-              {restaurant.logoUrl
-                ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-16 w-16 shrink-0 rounded-[22px] border border-border bg-white object-contain p-1.5 shadow-md sm:h-[84px] sm:w-[84px]" />
-                : <span className="grid h-16 w-16 shrink-0 place-items-center rounded-[22px] bg-ink text-2xl font-black text-white shadow-md sm:h-[84px] sm:w-[84px] sm:text-3xl">{restaurant.name.charAt(0)}</span>}
-              <div className="min-w-0">
-                <h1 className="break-words text-[2rem] font-black leading-[0.98] tracking-tight text-stone-900 sm:text-[2.65rem] xl:text-[3.25rem]">{restaurant.tradeName || restaurant.name}</h1>
-                <p className="mt-3 max-w-xl text-sm font-semibold text-stone-500 sm:text-base">{[location, serviceLabel].filter(Boolean).join(' • ')}</p>
+        <div className="relative bg-white">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-accent/[.05] to-transparent" />
+          <div className="relative grid gap-6 px-5 py-6 sm:px-7 sm:py-7 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10 lg:px-9 lg:py-8">
+            <div className="min-w-0">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                {restaurant.logoUrl
+                  ? <img src={restaurant.logoUrl} alt={`Logo de ${restaurant.name}`} className="h-[76px] w-[76px] shrink-0 rounded-[24px] border border-border/80 bg-white object-contain p-2 shadow-[0_12px_28px_rgba(41,37,36,.10)] sm:h-[92px] sm:w-[92px]" />
+                  : <span className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-[24px] bg-gradient-to-br from-ink to-primary text-2xl font-black text-white shadow-[0_12px_28px_rgba(41,37,36,.16)] sm:h-[92px] sm:w-[92px] sm:text-3xl">{restaurant.name.charAt(0)}</span>}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[.16em] ${restaurant.canAcceptOrdersNow ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}><span className={`h-2 w-2 rounded-full ${restaurant.canAcceptOrdersNow ? 'bg-success' : 'bg-danger'}`} />{availability}</span>
+                    <span className="inline-flex rounded-full border border-border bg-background/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.16em] text-stone-600">{establishmentLabel}</span>
+                  </div>
+                  <h1 className="mt-3 break-words text-[2rem] font-black leading-none tracking-[-.035em] text-stone-900 sm:text-[2.7rem] lg:text-[3.15rem]">{restaurant.tradeName || restaurant.name}</h1>
+                  <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-stone-500 sm:text-[15px]">
+                    {location && <span>{location}</span>}
+                    {location && <span aria-hidden className="text-stone-300">•</span>}
+                    <span>{serviceLabel}</span>
+                  </p>
+                </div>
               </div>
+              <p className="mt-5 max-w-3xl text-sm leading-6 text-stone-600 sm:text-[15px] sm:leading-7">{restaurant.description ?? 'Comida boa, atendimento prático e seu pedido do seu jeito.'}</p>
             </div>
 
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-stone-600 sm:text-[15px]">{restaurant.description ?? 'Comida boa, atendimento prático e seu pedido do seu jeito.'}</p>
-
-            <details className="mt-6 max-w-2xl rounded-[24px] border border-border bg-background/75 p-4 shadow-sm">
-              <summary className="flex cursor-pointer list-none items-center gap-2 font-black text-ink">
-                <ClockIcon />
-                <span>Horários de funcionamento</span>
-                <span className="ml-auto text-stone-400">⌄</span>
+            <details className="self-start rounded-[24px] border border-border/90 bg-background/65 p-4 shadow-[0_10px_30px_rgba(41,37,36,.05)] sm:p-5">
+              <summary className="flex cursor-pointer list-none items-center gap-3 font-black text-ink">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink/10"><ClockIcon /></span>
+                <span className="min-w-0 flex-1">Horários de funcionamento</span>
+                <span className="text-stone-400">⌄</span>
               </summary>
-              <div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">
+              <div className="mt-4 space-y-2.5 border-t border-border pt-4 text-sm">
                 {restaurant.businessHours.length ? restaurant.businessHours.map(day => <p key={day.dayOfWeek} className="flex flex-col justify-between gap-1 sm:flex-row sm:gap-4"><b>{['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][day.dayOfWeek]}</b><span className="text-stone-600 sm:text-right">{day.isOpen ? day.periods.map(period => `${period.openTime} — ${period.closeTime}`).join(' · ') : 'Fechado'}</span></p>) : <p>Horários ainda não informados.</p>}
                 <p className="pt-1 text-xs text-stone-400">Fuso: {restaurant.timezone}</p>
               </div>
             </details>
           </div>
 
-          <div className="relative order-1 min-h-[250px] overflow-hidden bg-gradient-to-br from-ink via-primary-hover to-accent sm:min-h-[320px] xl:order-2 xl:min-h-[420px]">
-            {(restaurant.bannerDesktopUrl || restaurant.bannerUrl) ? <>
-              <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75" />
-              <picture className="relative block h-full w-full">
-                <source media="(max-width: 767px)" srcSet={restaurant.bannerMobileUrl || restaurant.bannerDesktopUrl || restaurant.bannerUrl} />
-                <img src={restaurant.bannerDesktopUrl || restaurant.bannerUrl} alt={`Banner de ${restaurant.tradeName || restaurant.name}`} className="h-full w-full object-cover" />
-              </picture>
-              <div className="absolute inset-0 bg-gradient-to-tr from-black/45 via-black/5 to-transparent" />
-            </> : <>
-              <div className="absolute -right-10 -top-10 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
-              <div className="absolute bottom-5 right-6 max-w-[250px] rounded-3xl border border-white/15 bg-black/15 p-5 text-right text-white backdrop-blur-sm sm:bottom-8 sm:right-8">
-                <p className="text-2xl font-black leading-tight">Sabor que aproxima pessoas.</p>
-                <p className="mt-2 text-sm text-white/75">Escolha seus favoritos e peça em poucos passos.</p>
-              </div>
-            </>}
+          <div className="grid border-t border-border/80 bg-[#fcfaf7] sm:grid-cols-2 xl:grid-cols-3">
+            <div className="flex min-h-[78px] items-center gap-3 border-b border-border/80 px-5 py-4 sm:px-7 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-success/10 text-success"><ClockIcon /></span><div className="min-w-0"><b className="block text-sm">{availability}</b><span className="text-xs text-stone-500">Confira os horários da loja</span></div></div>
+            <div className="flex min-h-[78px] items-center gap-3 border-b border-border/80 px-5 py-4 sm:px-7 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink/10 text-ink"><LocationIcon /></span><div className="min-w-0"><b className="block text-sm">{location || 'Localização da loja'}</b><span className="line-clamp-1 text-xs text-stone-500">{restaurant.address || 'Consulte no pedido'}</span></div></div>
+            <div className="flex min-h-[78px] items-center gap-3 px-5 py-4 sm:col-span-2 sm:px-7 xl:col-span-1"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-accent/15 text-accent"><DeliveryIcon /></span><div className="min-w-0"><b className="block text-sm">{serviceLabel}</b><span className="text-xs text-stone-500">Escolha na finalização</span></div></div>
           </div>
-        </div>
-
-        <div className="grid border-t border-border bg-background/45 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="flex min-h-[76px] items-center gap-3 border-b border-border px-5 py-4 sm:px-6 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success/10 text-success"><ClockIcon /></span><div><b className="block text-sm">{availability}</b><span className="text-xs text-stone-500">Confira os horários da loja</span></div></div>
-          <div className="flex min-h-[76px] items-center gap-3 border-b border-border px-5 py-4 sm:px-6 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink/10 text-ink"><LocationIcon /></span><div><b className="block text-sm">{location || 'Localização da loja'}</b><span className="text-xs text-stone-500">{restaurant.address || 'Consulte no pedido'}</span></div></div>
-          <div className="flex min-h-[76px] items-center gap-3 px-5 py-4 sm:px-6 sm:col-span-2 xl:col-span-1"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent"><DeliveryIcon /></span><div><b className="block text-sm">{serviceLabel}</b><span className="text-xs text-stone-500">Escolha na finalização</span></div></div>
         </div>
       </section>
     </div>
   </header>;
 }
-
 function CategoryIcon({ name, large = false }: { name: string; large?: boolean }) {
   const normalized = name.toLocaleLowerCase('pt-BR');
   const size = large ? 'h-5 w-5' : 'h-4 w-4';
