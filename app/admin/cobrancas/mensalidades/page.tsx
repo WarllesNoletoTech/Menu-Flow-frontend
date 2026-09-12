@@ -404,70 +404,61 @@ Cardápios mais simples, clientes mais felizes.`);
         </p>
       )}
       <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-end sm:justify-between"><div><span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-accent">Histórico financeiro</span><h2 className="mt-3 text-2xl font-black tracking-tight text-stone-900">Relatórios emitidos</h2></div><span className="text-sm font-semibold text-stone-500">{items.length} {items.length === 1 ? "relatório" : "relatórios"}</span></div>
-      <div className="overflow-x-auto rounded-[30px] border border-border/90 bg-white shadow-[0_14px_36px_rgba(41,37,36,.05)]">
-        <table className="w-full min-w-[1050px]">
-          <thead className="bg-background/70">
-            <tr>
-              {[
-                "Relatório",
-                "Empresa",
-                "Período",
-                "Pedidos",
-                "Taxa de serviço Menu Flow",
-                "Mensalidade",
-                "Total",
-                "Status",
-                "Ações",
-              ].map((x) => (
-                <th className="p-4 text-left text-[11px] font-black uppercase tracking-[.1em] text-stone-500" key={x}>
-                  {x}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((r) => (
-              <tr className="border-t border-border transition hover:bg-background/35" key={r._id}>
-                <td className="p-4 font-bold">{r.reportNumber}</td>
-                <td className="p-4">
-                  {r.restaurantId.tradeName || r.restaurantId.name}
-                </td>
-                <td className="p-4">
-                  {date(r.periodStart)} – {date(r.periodEnd)}
-                </td>
-                <td className="p-4">{r.orderCount}</td>
-                <td className="p-4">
-                  {money(r.serviceFeeTotalCents)} <Help />
-                </td>
-                <td className="p-4">{money(r.monthlyFeeCents)}</td>
-                <td className="p-4 font-black">{money(r.totalCents)}</td>
-                <td className="p-4">{labels[r.status] ?? r.status}</td>
-                <td className="p-4">
-                  <div className="flex gap-3">
-                    <button
-                      className="font-bold underline"
-                      onClick={() => void pdf(r)}
-                    >
-                      Baixar PDF e enviar
-                    </button>
-                    {r.status === "GENERATED" && (
-                      <button className="font-bold underline" onClick={() => setPaying(r)}>
-                        Marcar como pago
-                      </button>
-                    )}
-                    {(r.status === "GENERATED" || r.status === "DRAFT") && (
-                      <button className="font-bold text-danger underline" onClick={() => setDeleting(r)}>
-                        Excluir
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid gap-4">
+        {items.map((r) => (
+          <article key={r._id} className="overflow-hidden rounded-[28px] border border-border/90 bg-white shadow-[0_12px_32px_rgba(41,37,36,.05)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(41,37,36,.08)]">
+            <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(170px,.85fr)_minmax(190px,1fr)_minmax(180px,.9fr)_minmax(130px,.65fr)_minmax(150px,.7fr)_auto] xl:items-center">
+              <div className="min-w-0">
+                <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.13em] text-primary">Relatório</span>
+                <h3 className="mt-2 break-words text-base font-black text-stone-900">{r.reportNumber}</h3>
+                <p className="mt-1 text-xs text-stone-400">Emitido em {date(r.generatedAt)}</p>
+              </div>
+
+              <ReportInfo label="Empresa" value={r.restaurantId.tradeName || r.restaurantId.name} />
+              <ReportInfo label="Período" value={`${date(r.periodStart)} a ${date(r.periodEnd)}`} />
+              <ReportInfo label="Pedidos" value={String(r.orderCount)} />
+              <div className="min-w-0 rounded-[20px] border border-border bg-background/45 px-4 py-3 xl:border-transparent xl:bg-transparent xl:px-0 xl:py-0">
+                <span className="block text-[10px] font-black uppercase tracking-[.13em] text-stone-400">Total</span>
+                <strong className="mt-1 block text-lg font-black text-stone-900">{money(r.totalCents)}</strong>
+                <span className="mt-1 block text-xs text-stone-500">Taxa {money(r.serviceFeeTotalCents)} · Mensalidade {money(r.monthlyFeeCents)}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <ReportStatus status={r.status} />
+                <button
+                  type="button"
+                  onClick={() => void pdf(r)}
+                  className="group inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-soft"
+                >
+                  <DownloadIcon />
+                  <span>Baixar PDF</span>
+                  <span className="hidden text-[10px] font-bold text-white/70 2xl:inline">e abrir WhatsApp</span>
+                </button>
+                {r.status === "GENERATED" && (
+                  <button type="button" className="min-h-11 rounded-2xl border border-success/20 bg-success/10 px-4 py-2.5 text-sm font-black text-success transition hover:bg-success/15" onClick={() => setPaying(r)}>
+                    Marcar como pago
+                  </button>
+                )}
+                {(r.status === "GENERATED" || r.status === "DRAFT") && (
+                  <button type="button" className="min-h-11 rounded-2xl border border-danger/15 bg-danger/10 px-4 py-2.5 text-sm font-black text-danger transition hover:bg-danger/15" onClick={() => setDeleting(r)}>
+                    Excluir
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-t border-border bg-background/35 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 xl:grid-cols-4">
+              <MiniFinance label="Taxa de serviço Menu Flow" value={money(r.serviceFeeTotalCents)} help />
+              <MiniFinance label="Mensalidade" value={money(r.monthlyFeeCents)} />
+              <MiniFinance label="Total do relatório" value={money(r.totalCents)} strong />
+              <MiniFinance label="Situação" value={labels[r.status] ?? r.status} />
+            </div>
+          </article>
+        ))}
         {!items.length && !error && (
-          <p className="p-4 text-stone-500">Nenhum relatório emitido.</p>
+          <div className="rounded-[28px] border border-dashed border-border bg-white p-10 text-center shadow-sm">
+            <h3 className="text-xl font-black text-stone-900">Nenhum relatório emitido</h3>
+            <p className="mt-2 text-sm text-stone-500">Quando um relatório for gerado, ele aparecerá aqui com ações de PDF e pagamento.</p>
+          </div>
         )}
       </div>
       {paying && (
@@ -498,6 +489,20 @@ Cardápios mais simples, clientes mais felizes.`);
 function SummaryCard({ label, value, tone = "primary", helper }: { label: string; value: string; tone?: "primary" | "success" | "warning"; helper?: string }) {
   const toneClass = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/10 text-warning" : "bg-primary/10 text-primary";
   return <article className="rounded-[24px] border border-border/90 bg-white p-5 shadow-[0_12px_30px_rgba(41,37,36,.05)]"><div className="flex items-start justify-between gap-3"><p className="text-sm font-bold text-stone-500">{label}</p><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[.14em] ${toneClass}`}>Resumo</span></div><strong className="mt-3 block text-[30px] font-black tracking-tight text-stone-900">{value}</strong>{helper && <p className="mt-1 text-xs font-semibold text-stone-400">Total emitido: {helper}</p>}</article>;
+}
+
+function ReportInfo({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0 rounded-[20px] border border-border bg-background/45 px-4 py-3 xl:border-transparent xl:bg-transparent xl:px-0 xl:py-0"><span className="block text-[10px] font-black uppercase tracking-[.13em] text-stone-400">{label}</span><span className="mt-1 block break-words text-sm font-semibold text-stone-700">{value}</span></div>;
+}
+function ReportStatus({ status }: { status: string }) {
+  const config = status === "PAID" ? ["Pago", "bg-success/10 text-success border-success/15"] : status === "GENERATED" ? ["Gerado", "bg-primary/10 text-primary border-primary/15"] : status === "DRAFT" ? ["Rascunho", "bg-warning/10 text-warning border-warning/15"] : [labels[status] ?? status, "bg-stone-100 text-stone-600 border-stone-200"];
+  return <span className={`inline-flex min-h-9 items-center rounded-full border px-3 text-[10px] font-black uppercase tracking-[.13em] ${config[1]}`}>{config[0]}</span>;
+}
+function MiniFinance({ label, value, help = false, strong = false }: { label: string; value: string; help?: boolean; strong?: boolean }) {
+  return <div className="rounded-[18px] border border-border bg-white/75 px-4 py-3"><span className="text-[10px] font-black uppercase tracking-[.12em] text-stone-400">{label}</span><div className="mt-1 flex items-center gap-2"><span className={strong ? "text-base font-black text-stone-900" : "text-sm font-bold text-stone-700"}>{value}</span>{help && <Help />}</div></div>;
+}
+function DownloadIcon() {
+  return <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>;
 }
 
 function Help() {

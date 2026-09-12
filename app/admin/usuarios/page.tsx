@@ -152,76 +152,44 @@ export default function UsersPage() {
       </div>
 
       {message && <p className="rounded-[22px] border border-border bg-surface px-4 py-3 text-sm font-semibold text-stone-700">{message}</p>}
-
-      <div className="grid gap-4 lg:hidden">
+      <div className="grid gap-4">
         {users.map((user) => (
-          <article key={user.id} className="min-w-0 rounded-[28px] border border-border/90 bg-white p-5 shadow-[0_12px_32px_rgba(41,37,36,.05)]">
-            <div className="flex items-start gap-3">
-              <Avatar user={user} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="break-words font-black text-stone-900">{user.name}</h2>
-                  <Status user={user} />
+          <article key={user.id} className="overflow-hidden rounded-[28px] border border-border/90 bg-white shadow-[0_12px_32px_rgba(41,37,36,.05)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(41,37,36,.08)]">
+            <div className="grid min-w-0 gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(230px,1.25fr)_minmax(210px,1fr)_minmax(150px,.7fr)_minmax(180px,.8fr)_minmax(140px,.65fr)_auto] xl:items-center">
+              <div className="flex min-w-0 items-start gap-3">
+                <Avatar user={user} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="break-words text-base font-black text-stone-900">{user.name}</h2>
+                    <Status user={user} />
+                  </div>
+                  <p className="mt-1 break-all text-sm font-medium text-stone-500">{user.email}</p>
+                  <p className="mt-2 text-xs text-stone-400">Cadastro em {new Date(user.createdAt).toLocaleDateString('pt-BR')}</p>
                 </div>
-                <p className="mt-1 break-all text-sm text-stone-500">{user.email}</p>
               </div>
-            </div>
-            <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+
+              <Info label="Contato" value={user.phone || 'Telefone não informado'} />
               <Info label="Tipo" value={roleLabel[user.role]} />
               <Info label="Estabelecimento" value={user.establishment || 'Não vinculado'} />
-              <Info label="Telefone" value={user.phone || 'Não informado'} />
-              <Info label="Cadastro" value={new Date(user.createdAt).toLocaleDateString('pt-BR')} />
-            </dl>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {!user.deletedAt && <ActionButton onClick={() => open(user, 'edit')}>Editar</ActionButton>}
-              <ActionButton primary onClick={() => open(user, 'detail')}>Ver detalhes</ActionButton>
+              <Info label="Situação" value={user.deletedAt ? 'Excluído' : user.active ? 'Ativo' : 'Bloqueado'} />
+
+              <div className="flex flex-wrap gap-2 xl:max-w-[310px] xl:justify-end">
+                {user.deletedAt ? (
+                  <ActionButton primary onClick={() => void action(`/users/${user.id}/restore`, 'PATCH', undefined, 'Restaurando...')}>{busy ? 'Aguarde...' : 'Restaurar'}</ActionButton>
+                ) : (
+                  <>
+                    <ActionButton onClick={() => open(user, 'edit')}>Editar</ActionButton>
+                    <ActionButton onClick={() => open(user, 'block')}>{user.active ? 'Bloquear' : 'Desbloquear'}</ActionButton>
+                    <ActionButton onClick={() => open(user, 'password')}>Redefinir senha</ActionButton>
+                    <ActionButton danger onClick={() => open(user, 'delete')}>Excluir</ActionButton>
+                  </>
+                )}
+                <ActionButton primary onClick={() => open(user, 'detail')}>Detalhes</ActionButton>
+              </div>
             </div>
           </article>
         ))}
       </div>
-
-      <div className="hidden overflow-hidden rounded-[30px] border border-border/90 bg-white shadow-[0_14px_36px_rgba(41,37,36,.05)] lg:block">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-left text-sm">
-            <thead className="bg-background/70">
-              <tr>{['Usuário', 'Contato', 'Tipo', 'Estabelecimento', 'Situação', 'Cadastro', 'Ações'].map((label) => <th key={label} className="px-5 py-4 text-[11px] font-black uppercase tracking-[.12em] text-stone-500">{label}</th>)}</tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {users.map((user) => (
-                <tr key={user.id} className="transition hover:bg-background/35">
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar user={user} small />
-                      <div className="min-w-0"><b className="block max-w-48 truncate text-stone-900">{user.name}</b><span className="mt-0.5 block text-xs text-stone-400">ID de acesso cadastrado</span></div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4"><span className="block break-all font-semibold text-stone-700">{user.email}</span><span className="mt-1 block text-xs text-stone-500">{user.phone || 'Telefone não informado'}</span></td>
-                  <td className="px-5 py-4"><RoleBadge role={user.role} /></td>
-                  <td className="px-5 py-4 font-semibold text-stone-600">{user.establishment || '—'}</td>
-                  <td className="px-5 py-4"><Status user={user} /></td>
-                  <td className="px-5 py-4 text-stone-600">{new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
-                  <td className="px-5 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      {user.deletedAt ? (
-                        <ActionButton onClick={() => void action(`/users/${user.id}/restore`, 'PATCH', undefined, 'Restaurando...')}>{busy ? 'Aguarde...' : 'Restaurar'}</ActionButton>
-                      ) : (
-                        <>
-                          <ActionButton onClick={() => open(user, 'edit')}>Editar</ActionButton>
-                          <ActionButton onClick={() => open(user, 'block')}>{user.active ? 'Bloquear' : 'Desbloquear'}</ActionButton>
-                          <ActionButton onClick={() => open(user, 'password')}>Redefinir senha</ActionButton>
-                          <ActionButton danger onClick={() => open(user, 'delete')}>Excluir</ActionButton>
-                        </>
-                      )}
-                      <ActionButton primary onClick={() => open(user, 'detail')}>Detalhes</ActionButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <div className="flex items-center justify-between gap-3">
         <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="min-h-11 rounded-2xl border border-border bg-white px-4 text-sm font-black text-stone-700 shadow-sm disabled:opacity-40">← Anterior</button>
         <span className="text-center text-sm font-semibold text-stone-500">Página {page} de {pages}</span>
@@ -282,7 +250,7 @@ function RoleBadge({ role }: { role: Role }) {
 }
 
 function Info({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-[18px] border border-border bg-background/45 px-4 py-3"><dt className="text-[10px] font-black uppercase tracking-[.13em] text-stone-400">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-stone-700">{value}</dd></div>;
+  return <div className="min-w-0 rounded-[18px] border border-border bg-background/45 px-4 py-3 xl:border-transparent xl:bg-transparent xl:px-0 xl:py-0"><dt className="text-[10px] font-black uppercase tracking-[.13em] text-stone-400">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-stone-700">{value}</dd></div>;
 }
 
 function Fields({ form, set }: { form: UserForm; set: (value: UserForm) => void }) {
