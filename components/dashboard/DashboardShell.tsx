@@ -9,6 +9,7 @@ import { useAuth } from '../AuthProvider';
 import { DashboardProvider } from './DashboardContext';
 import { dashboardMenus, panelNames, type DashboardItem } from './config';
 import { BrandLogo } from '../BrandLogo';
+import { DashboardNotifications } from '../notifications/DashboardNotifications';
 
 type Props = {
   role: Role;
@@ -33,6 +34,7 @@ export function DashboardShell({
   return (
     <DashboardProvider>
       <div className="min-h-[100dvh] min-w-0 bg-[radial-gradient(circle_at_top_right,rgba(212,123,75,.10),transparent_25%),radial-gradient(circle_at_bottom_left,rgba(120,47,49,.055),transparent_24%),var(--mf-background)] lg:pl-[286px]">
+        <DashboardNotifications role={role} />
         <DashboardSidebar
           role={role}
           open={mobile}

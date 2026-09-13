@@ -1,4 +1,4 @@
-const CACHE_NAME = 'menu-flow-pwa-v2';
+const CACHE_NAME = 'menu-flow-pwa-v4';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,
@@ -61,4 +61,43 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
+});
+
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = payload.title || 'Menu Flow';
+  const tag = payload.tag || `menu-flow-${Date.now()}`;
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || 'Você recebeu uma nova notificação.',
+      icon: payload.icon || '/assets/branding/menu-flow-icon-192.png',
+      badge: payload.badge || '/assets/branding/menu-flow-symbol.png',
+      tag,
+      renotify: true,
+      data: { url: payload.url || '/empresa/pedidos' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = event.notification?.data?.url || '/empresa/pedidos';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
 });
