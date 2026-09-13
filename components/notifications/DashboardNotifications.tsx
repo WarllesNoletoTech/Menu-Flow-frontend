@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Role } from '../../lib/auth';
 import { useOrderSocket } from '../../lib/order-socket';
-import { defaultNotificationPreferences, getNotificationPreferences, hasActivePushSubscription, showSystemNotification, type NotificationPreferences } from '../../lib/notifications';
+import { defaultNotificationPreferences, ensureCurrentDeviceSubscription, getNotificationPreferences, hasActivePushSubscription, notificationPermission, showSystemNotification, type NotificationPreferences } from '../../lib/notifications';
 
 type OrderEvent = { orderNumber?: string; totalCents?: number; total?: number; fulfillment?: string; status?: string; restaurantName?: string };
 
@@ -12,7 +12,14 @@ export function DashboardNotifications({ role }: { role: Role }) {
 
   useEffect(() => {
     if (role !== 'SUPER_ADMIN' && role !== 'RESTAURANT_ADMIN') return;
-    const refresh = () => { void getNotificationPreferences().then((value) => { preferences.current = value; }).catch(() => undefined); };
+    const refresh = () => {
+      void getNotificationPreferences().then(async (value) => {
+        preferences.current = value;
+        if (value.enabled && value.pushAvailable && value.publicKey && notificationPermission() === 'granted') {
+          await ensureCurrentDeviceSubscription(value.publicKey).catch(() => undefined);
+        }
+      }).catch(() => undefined);
+    };
     refresh();
     const changed = (event: Event) => { preferences.current = (event as CustomEvent<NotificationPreferences>).detail; };
     window.addEventListener('menu-flow:notification-preferences', changed);

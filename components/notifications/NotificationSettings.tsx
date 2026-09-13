@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   defaultNotificationPreferences,
+  ensureCurrentDeviceSubscription,
   getNotificationPreferences,
   hasActivePushSubscription,
   notificationPermission,
@@ -37,8 +38,13 @@ export function NotificationSettings({ audience }: { audience: 'admin' | 'lojist
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [saved] = await Promise.all([getNotificationPreferences(), refreshDevice()]);
+      let saved = await getNotificationPreferences();
+      if (saved.enabled && saved.pushAvailable && saved.publicKey && notificationPermission() === 'granted') {
+        await ensureCurrentDeviceSubscription(saved.publicKey).catch(() => undefined);
+        saved = await getNotificationPreferences();
+      }
       setSettings(saved);
+      await refreshDevice();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível carregar as preferências.');
     } finally { setLoading(false); }
