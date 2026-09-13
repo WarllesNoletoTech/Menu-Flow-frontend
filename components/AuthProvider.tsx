@@ -12,7 +12,7 @@ import {
   User,
 } from '../lib/auth';
 import { ApiError, authenticatedRequest } from '../lib/authenticated-request';
-import { detachPushSubscriptionOnLogout } from '../lib/notifications';
+import { detachPushSubscriptionOnLogout, syncStaffPushIfAllowed } from '../lib/notifications';
 
 type AuthContextValue = {
   /** Usuário operacional: admin, lojista ou funcionário. */
@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (verified.role === 'CUSTOMER') throw new ApiError('Sessão operacional inválida.', 401);
       saveSession({ ...session, user: verified });
       setUser(verified);
+      void syncStaffPushIfAllowed();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         clearSession();
@@ -117,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveSession(session);
     setAuthError('');
     setUser(session.user);
+    void syncStaffPushIfAllowed();
   }, [loginCustomer]);
 
   const logout = useCallback(() => {

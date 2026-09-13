@@ -111,13 +111,40 @@ function subscriptionPayload(subscription: PushSubscription) {
   };
 }
 
-async function rememberPushRuntimeConfig(registration: ServiceWorkerRegistration, publicKey: string) {
+async function rememberPushRuntimeConfig(
+  registration: ServiceWorkerRegistration,
+  publicKey: string,
+  deliveryToken?: string | null,
+) {
   const worker = registration.active || registration.waiting || registration.installing;
   worker?.postMessage({
     type: 'MF_PUSH_CONFIG',
     publicKey,
     renewUrl: apiUrl('/notifications/push/subscriptions/renew'),
+    pullUrl: apiUrl('/notifications/push/messages/pull'),
+    deliveryToken: deliveryToken || '',
   });
+}
+
+async function cleanupLegacyPushRegistrations(primary: ServiceWorkerRegistration) {
+  const registrations = await serviceWorkerRegistrations();
+  await Promise.allSettled(registrations.map(async (registration) => {
+    if (registration === primary || registration.scope === primary.scope) {
+      const worker = registration.active || registration.waiting || registration.installing;
+      const primaryWorker = primary.active || primary.waiting || primary.installing;
+      if (worker?.scriptURL === primaryWorker?.scriptURL) return;
+    }
+
+    const subscription = await registration.pushManager.getSubscription().catch(() => null);
+    if (subscription) {
+      await authenticatedRequest('/notifications/subscriptions', {
+        method: 'DELETE',
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      }).catch(() => undefined);
+      await subscription.unsubscribe().catch(() => undefined);
+    }
+    await registration.unregister().catch(() => undefined);
+  }));
 }
 
 async function removeMigratedStaleEndpoints() {
@@ -167,12 +194,17 @@ export async function ensureCurrentDeviceSubscription(
   }
 
   const payload = subscriptionPayload(subscription);
-  await authenticatedRequest('/notifications/subscriptions', {
+  const saved = await authenticatedRequest<{
+    ok: boolean;
+    deviceCount: number;
+    deliveryToken?: string | null;
+  }>('/notifications/subscriptions', {
     method: 'POST',
     body: JSON.stringify({ ...payload, deviceId: getOrCreateDeviceId() }),
   });
-  await rememberPushRuntimeConfig(registration, publicKey);
+  await rememberPushRuntimeConfig(registration, publicKey, saved.deliveryToken);
   await removeMigratedStaleEndpoints();
+  await cleanupLegacyPushRegistrations(registration);
   return subscription;
 }
 
@@ -214,9 +246,19 @@ export async function detachPushSubscriptionOnLogout(accessToken: string) {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ endpoint: subscription.endpoint }),
       }).catch(() => undefined);
-      await subscription.unsubscribe().catch(() => undefined);
     }));
   } catch { /* best effort on logout */ }
+}
+
+export async function syncStaffPushIfAllowed() {
+  try {
+    if (notificationPermission() !== 'granted') return false;
+    const settings = await getNotificationPreferences();
+    if (!settings.enabled || !settings.pushAvailable || !settings.publicKey) return false;
+    return Boolean(await ensureCurrentDeviceSubscription(settings.publicKey));
+  } catch {
+    return false;
+  }
 }
 
 export function sendTestPush() {

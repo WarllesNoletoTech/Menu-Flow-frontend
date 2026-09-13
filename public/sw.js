@@ -1,4 +1,4 @@
-const CACHE_NAME = 'menu-flow-pwa-v5';
+const CACHE_NAME = 'menu-flow-pwa-v6';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,
@@ -75,8 +75,20 @@ self.addEventListener('message', (event) => {
   if (event.data?.type !== 'MF_PUSH_CONFIG') return;
   const publicKey = typeof event.data.publicKey === 'string' ? event.data.publicKey : '';
   const renewUrl = typeof event.data.renewUrl === 'string' ? event.data.renewUrl : '';
+  const pullUrl = typeof event.data.pullUrl === 'string' ? event.data.pullUrl : '';
+  const deliveryToken = typeof event.data.deliveryToken === 'string' ? event.data.deliveryToken : '';
   if (!publicKey || !renewUrl) return;
-  event.waitUntil(writePushConfig({ publicKey, renewUrl, savedAt: Date.now() }).catch(() => undefined));
+  event.waitUntil((async () => {
+    const previous = await readPushConfig().catch(() => null);
+    await writePushConfig({
+      ...(previous || {}),
+      publicKey,
+      renewUrl,
+      pullUrl: pullUrl || previous?.pullUrl || '',
+      deliveryToken: deliveryToken || previous?.deliveryToken || '',
+      savedAt: Date.now(),
+    });
+  })().catch(() => undefined));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -116,27 +128,63 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-self.addEventListener('push', (event) => {
-  let payload = {};
+async function pullPendingPushMessages() {
+  const config = await readPushConfig().catch(() => null);
+  if (!config?.pullUrl || !config?.deliveryToken) return [];
   try {
-    payload = event.data ? event.data.json() : {};
+    const response = await fetch(config.pullUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ token: config.deliveryToken }),
+      cache: 'no-store',
+    });
+    if (!response.ok) return [];
+    const body = await response.json().catch(() => null);
+    return Array.isArray(body?.notifications) ? body.notifications : [];
   } catch {
-    payload = { body: event.data ? event.data.text() : '' };
+    return [];
   }
+}
 
+async function showPushNotification(payload = {}) {
   const title = payload.title || 'Menu Flow';
-  const tag = payload.tag || `menu-flow-${Date.now()}`;
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: payload.body || 'Você recebeu uma nova notificação.',
-      icon: payload.icon || '/assets/branding/menu-flow-icon-192.png',
-      badge: payload.badge || '/assets/branding/menu-flow-symbol.png',
-      tag,
-      renotify: true,
-      requireInteraction: Boolean(payload.requireInteraction),
-      data: { url: payload.url || '/empresa/pedidos' },
-    })
-  );
+  const tag = payload.tag || `menu-flow-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await self.registration.showNotification(title, {
+    body: payload.body || 'Você recebeu uma nova notificação.',
+    icon: payload.icon || '/assets/branding/menu-flow-icon-192.png',
+    badge: payload.badge || '/assets/branding/menu-flow-symbol.png',
+    tag,
+    renotify: true,
+    requireInteraction: Boolean(payload.requireInteraction),
+    data: { url: payload.url || '/empresa/pedidos' },
+  });
+}
+
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    let messages = [];
+    if (event.data) {
+      try {
+        messages = [event.data.json()];
+      } catch {
+        messages = [{ body: event.data.text() }];
+      }
+    } else {
+      messages = await pullPendingPushMessages();
+    }
+
+    if (!messages.length) {
+      messages = [{
+        title: 'Menu Flow',
+        body: 'Há uma nova atualização no seu painel de pedidos.',
+        url: '/empresa/pedidos',
+      }];
+    }
+
+    for (const message of messages.slice(-8)) {
+      await showPushNotification(message);
+    }
+  })());
 });
 
 // Se o Chrome/Android rotacionar a assinatura enquanto o app estiver fechado,
@@ -161,7 +209,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
       const nextJson = nextSubscription.toJSON();
       if (!oldSubscription.endpoint || !oldJson.keys?.auth || !nextJson.endpoint || !nextJson.keys?.p256dh || !nextJson.keys?.auth) return;
 
-      await fetch(config.renewUrl, {
+      const response = await fetch(config.renewUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
@@ -173,7 +221,13 @@ self.addEventListener('pushsubscriptionchange', (event) => {
             keys: { p256dh: nextJson.keys.p256dh, auth: nextJson.keys.auth },
           },
         }),
-      }).catch(() => undefined);
+      }).catch(() => null);
+      if (response?.ok) {
+        const renewed = await response.json().catch(() => null);
+        if (renewed?.deliveryToken) {
+          await writePushConfig({ ...config, deliveryToken: renewed.deliveryToken, savedAt: Date.now() });
+        }
+      }
     } catch { /* recuperação best effort */ }
   })());
 });
