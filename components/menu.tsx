@@ -24,6 +24,65 @@ type StoredCartItem = { productId: string; quantity: number; addonNames: string[
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const entityId = (value: Product['categoryId']) => typeof value === 'string' ? value : value?._id;
 
+
+const weekDayNames = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+
+function timeToMinutes(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function zonedClock(now: Date, timezone: string) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(now);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const year = Number(values.year);
+    const month = Number(values.month);
+    const day = Number(values.day);
+    const hour = Number(values.hour);
+    const minute = Number(values.minute);
+    return {
+      dayOfWeek: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
+      minuteOfDay: hour * 60 + minute,
+    };
+  } catch {
+    return zonedClock(now, 'America/Sao_Paulo');
+  }
+}
+
+function nextOpeningText(restaurant: Restaurant, now = new Date()) {
+  if (restaurant.openingStatus.status !== 'CLOSED' || !restaurant.businessHours.length) return null;
+  const current = zonedClock(now, restaurant.timezone);
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const dayOfWeek = (current.dayOfWeek + offset) % 7;
+    const day = restaurant.businessHours.find((item) => item.dayOfWeek === dayOfWeek);
+    if (!day?.isOpen || !day.periods?.length) continue;
+    const openings = day.periods
+      .map((period) => ({ label: period.openTime, minutes: timeToMinutes(period.openTime) }))
+      .filter((period): period is { label: string; minutes: number } => period.minutes !== null)
+      .sort((a, b) => a.minutes - b.minutes);
+    const next = openings.find((period) => offset > 0 || period.minutes > current.minuteOfDay);
+    if (!next) continue;
+    if (offset === 0) return `Abre hoje às ${next.label}`;
+    if (offset === 1) return `Abre amanhã às ${next.label}`;
+    return `Abre ${weekDayNames[dayOfWeek]} às ${next.label}`;
+  }
+  return null;
+}
+
+
 export function Menu({ slug }: { slug: string }) {
   const { customerUser: user, loginCustomer: login, logoutCustomer: logout } = useAuth();
   const [restaurant, setRestaurant] = useState<Restaurant>();
@@ -288,6 +347,9 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(' - ');
   const establishmentLabel = restaurant.establishmentTypeName ?? legacyEstablishmentLabel(restaurant.establishmentType);
   const availability = restaurant.canAcceptOrdersNow ? 'Aberto agora' : restaurant.openingStatus.status === 'UNCONFIGURED' ? 'Horário não informado' : restaurant.openingStatus.status === 'OPEN' && !restaurant.acceptingOrders ? 'Pedidos pausados' : 'Fechado';
+  const nextOpening = nextOpeningText(restaurant);
+  const availabilityDetail = nextOpening
+    ?? (availability === 'Pedidos pausados' ? 'Pedidos estão temporariamente pausados' : 'Confira os horários da loja');
   const serviceLabel = restaurant.deliveryEnabled && restaurant.pickupEnabled ? 'Entrega e retirada' : restaurant.deliveryEnabled ? 'Entrega disponível' : 'Retirada no local';
   const desktopBanner = restaurant.bannerDesktopUrl || restaurant.bannerUrl;
   const mobileBanner = restaurant.bannerMobileUrl || desktopBanner;
@@ -341,6 +403,10 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
                     {location && <span aria-hidden className="text-stone-300">•</span>}
                     <span>{serviceLabel}</span>
                   </p>
+                  {nextOpening && <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-2xl border border-danger/20 bg-danger/[.06] px-3.5 py-2.5 text-sm font-black text-danger sm:px-4">
+                    <ClockIcon />
+                    <span><span className="mr-1">Fechado agora.</span>{nextOpening}.</span>
+                  </div>}
                 </div>
               </div>
               <p className="mt-5 max-w-3xl text-sm leading-6 text-stone-600 sm:text-[15px] sm:leading-7">{restaurant.description ?? 'Comida boa, atendimento prático e seu pedido do seu jeito.'}</p>
@@ -360,7 +426,7 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
           </div>
 
           <div className="grid border-t border-border/80 bg-[#fcfaf7] sm:grid-cols-2 xl:grid-cols-3">
-            <div className="flex min-h-[78px] items-center gap-3 border-b border-border/80 px-5 py-4 sm:px-7 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-success/10 text-success"><ClockIcon /></span><div className="min-w-0"><b className="block text-sm">{availability}</b><span className="text-xs text-stone-500">Confira os horários da loja</span></div></div>
+            <div className="flex min-h-[78px] items-center gap-3 border-b border-border/80 px-5 py-4 sm:px-7 xl:border-b-0 xl:border-r"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${restaurant.canAcceptOrdersNow ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}><ClockIcon /></span><div className="min-w-0"><b className="block text-sm">{availability}</b><span className={`text-xs ${nextOpening ? 'font-bold text-danger' : 'text-stone-500'}`}>{availabilityDetail}</span></div></div>
             <div className="flex min-h-[78px] items-center gap-3 border-b border-border/80 px-5 py-4 sm:px-7 xl:border-b-0 xl:border-r"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink/10 text-ink"><LocationIcon /></span><div className="min-w-0"><b className="block text-sm">{location || 'Localização da loja'}</b><span className="line-clamp-1 text-xs text-stone-500">{restaurant.address || 'Consulte no pedido'}</span></div></div>
             <div className="flex min-h-[78px] items-center gap-3 px-5 py-4 sm:col-span-2 sm:px-7 xl:col-span-1"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-accent/15 text-accent"><DeliveryIcon /></span><div className="min-w-0"><b className="block text-sm">{serviceLabel}</b><span className="text-xs text-stone-500">Escolha na finalização</span></div></div>
           </div>
