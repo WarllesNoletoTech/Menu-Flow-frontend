@@ -29,6 +29,13 @@ const config: NextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
           { key: 'Content-Type', value: 'application/manifest+json; charset=utf-8' }
         ]
+      },
+      {
+        source: '/manifest-lojista.webmanifest',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Content-Type', value: 'application/manifest+json; charset=utf-8' }
+        ]
       }
     ];
   }

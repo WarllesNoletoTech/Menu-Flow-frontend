@@ -1,0 +1,43 @@
+{
+  "id": "/pwa/menu-flow-lojista",
+  "name": "Menu Flow Lojista",
+  "short_name": "MF Lojista",
+  "description": "Painel do lojista Menu Flow para gerenciar pedidos, cardápio e operação.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/empresa?pwa=lojista",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F8F5F0",
+  "theme_color": "#221C1A",
+  "categories": ["business", "food", "productivity"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/assets/branding/menu-flow-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/branding/menu-flow-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pedidos",
+      "short_name": "Pedidos",
+      "url": "/empresa/pedidos",
+      "icons": [{ "src": "/assets/branding/menu-flow-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Cardápio",
+      "short_name": "Cardápio",
+      "url": "/empresa/cardapio",
+      "icons": [{ "src": "/assets/branding/menu-flow-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

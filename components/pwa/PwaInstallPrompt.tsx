@@ -1,67 +1,43 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-};
+import { usePwaInstall } from './PwaInstallContext';
 
 export function PwaInstallPrompt() {
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const pathname = usePathname();
+  const { canInstall, installed, standalone, install, mode } = usePwaInstall();
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    const standalone = window.matchMedia('(display-mode: standalone)').matches;
-    const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
-    if (standalone || navigatorWithStandalone.standalone === true) return;
+    if (canInstall) setHidden(false);
+  }, [canInstall, mode]);
 
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallEvent(event as BeforeInstallPromptEvent);
-      setHidden(false);
-    };
+  if (!canInstall || installed || standalone || hidden || pathname.endsWith('/empresa/instalar-app')) return null;
 
-    const onInstalled = () => {
-      setInstallEvent(null);
-      setHidden(true);
-    };
+  const merchant = mode === 'lojista';
 
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-    window.addEventListener('appinstalled', onInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
-  }, []);
-
-  if (!installEvent || hidden) return null;
-
-  const install = async () => {
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
-    if (choice.outcome === 'accepted') {
-      setInstallEvent(null);
-    } else {
-      setHidden(true);
-    }
+  const startInstall = async () => {
+    const choice = await install();
+    if (choice !== 'accepted') setHidden(true);
   };
 
   return (
     <aside
       role="dialog"
-      aria-label="Instalar Menu Flow"
-      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[100] mx-auto flex w-auto max-w-[460px] items-center gap-3 rounded-[22px] border border-stone-200 bg-white/95 p-3 shadow-[0_18px_60px_rgba(41,28,22,.20)] backdrop-blur-xl sm:inset-x-auto sm:right-5 sm:mx-0"
+      aria-label={merchant ? 'Instalar Menu Flow Lojista' : 'Instalar Menu Flow'}
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[100] mx-auto flex w-auto max-w-[470px] items-center gap-3 rounded-[22px] border border-stone-200 bg-white/95 p-3 shadow-[0_18px_60px_rgba(41,28,22,.20)] backdrop-blur-xl sm:inset-x-auto sm:right-5 sm:mx-0"
     >
       <img src="/assets/branding/menu-flow-icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl object-contain" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-black text-stone-900">Instalar Menu Flow</p>
-        <p className="mt-0.5 text-xs font-medium text-stone-500">Use como aplicativo no seu celular.</p>
+        <p className="text-sm font-black text-stone-900">{merchant ? 'Instalar Menu Flow Lojista' : 'Instalar Menu Flow'}</p>
+        <p className="mt-0.5 text-xs font-medium text-stone-500">
+          {merchant ? 'Abra direto no painel da sua loja no celular ou PC.' : 'Use como aplicativo no seu celular ou PC.'}
+        </p>
       </div>
       <button
         type="button"
-        onClick={() => void install()}
+        onClick={() => void startInstall()}
         className="min-h-10 shrink-0 rounded-xl bg-primary px-4 text-xs font-black text-white shadow-sm transition hover:brightness-95"
       >
         Instalar

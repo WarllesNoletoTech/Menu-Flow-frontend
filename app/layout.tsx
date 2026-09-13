@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '../components/AuthProvider';
 import { PwaInstallPrompt } from '../components/pwa/PwaInstallPrompt';
+import { PwaInstallProvider } from '../components/pwa/PwaInstallContext';
 import { PwaRegister } from '../components/pwa/PwaRegister';
 import './globals.css';
 
@@ -34,9 +35,11 @@ export default function Layout({ children }: Readonly<{ children: React.ReactNod
   return (
     <html lang="pt-BR">
       <body>
-        <AuthProvider>{children}</AuthProvider>
-        <PwaRegister />
-        <PwaInstallPrompt />
+        <PwaInstallProvider>
+          <AuthProvider>{children}</AuthProvider>
+          <PwaRegister />
+          <PwaInstallPrompt />
+        </PwaInstallProvider>
       </body>
     </html>
   );
