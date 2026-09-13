@@ -5,7 +5,7 @@
   "description": "Painel do lojista Menu Flow para gerenciar pedidos, cardápio e operação.",
   "lang": "pt-BR",
   "dir": "ltr",
-  "start_url": "/empresa?pwa=lojista",
+  "start_url": "/empresa/pedidos?pwa=lojista",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F8F5F0",
