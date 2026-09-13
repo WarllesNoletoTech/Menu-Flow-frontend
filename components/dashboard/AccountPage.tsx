@@ -2,12 +2,14 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import type { Role, User } from '../../lib/auth';
-import { roleLabel } from '../../lib/auth';
+import { getCustomerSession, getSession, roleLabel } from '../../lib/auth';
 import { useAuth } from '../AuthProvider';
 import { useDashboard } from './DashboardContext';
 
 export function AccountPage({ role, customer = false }: { role: Role; customer?: boolean }) {
-  const { user, login } = useAuth();
+  const auth = useAuth();
+  const user = customer ? auth.customerUser : auth.user;
+  const login = customer ? auth.loginCustomer : auth.login;
   const { request } = useDashboard();
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', reportWhatsapp: user?.reportWhatsapp || '' });
   const [message, setMessage] = useState('');
@@ -22,7 +24,7 @@ export function AccountPage({ role, customer = false }: { role: Role; customer?:
     setMessage('Salvando alterações…');
     try {
       const updated = await request<User>(customer ? '/customer/me' : '/auth/me', { method: 'PATCH', body: JSON.stringify(form) });
-      const session = (await import('../../lib/auth')).getSession();
+      const session = customer ? getCustomerSession() : getSession();
       if (session) login({ ...session, user: { ...session.user, ...updated, role } });
       setMessage('Dados salvos com sucesso.');
     } catch (error) {

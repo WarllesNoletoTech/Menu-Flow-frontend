@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { apiUrl } from '../lib/api';
 import { paymentMethodLabel } from '../lib/payment-methods';
-import { clearSession, getSession, type AuthSession } from '../lib/auth';
+import { clearCustomerSession, getCustomerSession, type AuthSession } from '../lib/auth';
 import { PasswordField } from './auth/PasswordField';
 import { useAuth } from './AuthProvider';
 import { UserMenu } from './auth/UserMenu';
@@ -25,7 +25,7 @@ const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currenc
 const entityId = (value: Product['categoryId']) => typeof value === 'string' ? value : value?._id;
 
 export function Menu({ slug }: { slug: string }) {
-  const { user, login, logout } = useAuth();
+  const { customerUser: user, loginCustomer: login, logoutCustomer: logout } = useAuth();
   const [restaurant, setRestaurant] = useState<Restaurant>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -109,7 +109,7 @@ export function Menu({ slug }: { slug: string }) {
     setMessage(undefined);
     setCheckout(false);
     if (restaurant) setFulfillment(canOfferDelivery(restaurant) ? 'DELIVERY' : 'PICKUP');
-    const session = getSession();
+    const session = getCustomerSession();
     if (!session || session.user.role !== 'CUSTOMER') {
       setAuthGate('welcome');
       return;
@@ -125,7 +125,7 @@ export function Menu({ slug }: { slug: string }) {
       setAuthGate(undefined);
       setCheckout(true);
     } catch {
-      clearSession();
+      clearCustomerSession();
       logout();
       setMessage('Sua sessão expirou. Entre novamente para continuar.');
       setAuthGate('login');
@@ -183,7 +183,7 @@ export function Menu({ slug }: { slug: string }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!restaurant || submitting) return;
-    const customerSession = getSession();
+    const customerSession = getCustomerSession();
     if (!customerSession || customerSession.user.role !== 'CUSTOMER') {
       setCheckout(false);
       setAuthGate('welcome');
@@ -206,7 +206,7 @@ export function Menu({ slug }: { slug: string }) {
     try {
       const response = await fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(), Authorization: `Bearer ${customerSession.accessToken}` }, body: JSON.stringify(payload) });
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) { whatsappWindow?.close(); clearSession(); logout(); setCheckout(false); setAuthGate('login'); setMessage(response.status === 401 ? 'Sua sessão expirou. Entre novamente para continuar.' : 'Para realizar pedidos, entre com uma conta de cliente.'); return; }
+        if (response.status === 401 || response.status === 403) { whatsappWindow?.close(); clearCustomerSession(); logout(); setCheckout(false); setAuthGate('login'); setMessage(response.status === 401 ? 'Sua sessão expirou. Entre novamente para continuar.' : 'Para realizar pedidos, entre com uma conta de cliente.'); return; }
         const data = await response.json().catch(() => null) as { message?: string | string[] } | null;
         setMessage(Array.isArray(data?.message) ? data.message[0] : data?.message ?? 'Não foi possível enviar o pedido');
         whatsappWindow?.close(); return;
@@ -297,7 +297,7 @@ function MenuHeader({ restaurant, slug }: { restaurant: Restaurant; slug: string
       <Link href="/" aria-label="Voltar para a página inicial do Menu Flow" className="shrink-0 rounded-xl px-1 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         <BrandLogo variant="wordmark" priority className="h-8 w-auto bg-transparent sm:h-10 [&_img]:h-full [&_img]:w-auto" />
       </Link>
-      <UserMenu returnTo={`/${slug}`} />
+      <UserMenu returnTo={`/${slug}`} audience="customer" />
     </div>
 
     <div className="mx-auto w-full max-w-[1480px] px-4 sm:px-6 lg:px-8">
@@ -482,7 +482,7 @@ function CheckoutModal({ restaurant, cart, subtotal, addonPrice, setQuantity, cl
     if (fulfillment === 'PICKUP' && !restaurant.pickupEnabled && deliveryOffered) setFulfillment('DELIVERY');
     if (fulfillment === 'DELIVERY' && !deliveryOffered && restaurant.pickupEnabled) setFulfillment('PICKUP');
   }, [deliveryOffered, fulfillment, restaurant.pickupEnabled, setFulfillment]);
-  useEffect(()=>{const session=getSession();if(session?.user.role!=='CUSTOMER')return;void fetch(apiUrl('/customer/me'),{headers:{Authorization:`Bearer ${session.accessToken}`}}).then(async response=>{if(response.ok){const profile=await response.json() as {addresses?:typeof savedAddresses};setSavedAddresses(profile.addresses??[])}}).catch(()=>undefined)},[]); // Addresses remain account-wide; eligibility is checked when selected.
+  useEffect(()=>{const session=getCustomerSession();if(session?.user.role!=='CUSTOMER')return;void fetch(apiUrl('/customer/me'),{headers:{Authorization:`Bearer ${session.accessToken}`}}).then(async response=>{if(response.ok){const profile=await response.json() as {addresses?:typeof savedAddresses};setSavedAddresses(profile.addresses??[])}}).catch(()=>undefined)},[]); // Addresses remain account-wide; eligibility is checked when selected.
   const universalZone = zones.find(zone => zone.coverageType === 'ALL');
   const selectedZone = universalZone ?? zones.find(zone => zone._id === zoneId);
   useEffect(()=>setAddressComplete(['zipCode','street','number','neighborhood'].every(field=>address[field as keyof typeof address].trim().length>0)),[address]);

@@ -401,7 +401,7 @@ function LegacyOrders({customer=false,employee=false}:{customer?:boolean;employe
   const path=customer?'/customer/orders':'/employee/orders';
   const load=useCallback(async()=>{setOrders(await request<Order[]>(path));setLoading(false)},[path,request]);
   useEffect(()=>{void load()},[load]);
-  useOrderSocket(useCallback(()=>{void load()},[load]));
+  useOrderSocket(useCallback(()=>{void load()},[load]), customer ? 'CUSTOMER' : 'STAFF');
   if(loading)return <p className="mt-5">Carregando pedidos...</p>;
   return <div className="mt-5 grid gap-4 xl:grid-cols-2">{orders.map(o=><article key={o._id} className="rounded-2xl bg-surface p-5"><b>#{o.orderNumber}</b><p>{orderStatus[o.status]}</p>{customer&&<Link href={`/acompanhar/${o.orderNumber}?token=${encodeURIComponent(o.publicToken||'')}`} className="mt-3 inline-block font-bold text-accent">Acompanhar pedido</Link>}</article>)}</div>;
 }

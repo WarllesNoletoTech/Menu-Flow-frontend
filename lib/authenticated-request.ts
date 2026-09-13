@@ -1,6 +1,6 @@
 'use client';
 import { apiUrl } from './api';
-import { clearSession, getSession } from './auth';
+import { AuthScope, clearCustomerSession, clearSession, getCustomerSession, getSession } from './auth';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status?: number) {
@@ -22,8 +22,8 @@ const fallback: Record<number, string> = {
   503: 'O serviço está temporariamente indisponível.',
 };
 
-export async function authenticatedRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const session = getSession();
+export async function authenticatedRequest<T>(path: string, init?: RequestInit, scope: AuthScope = 'STAFF'): Promise<T> {
+  const session = scope === 'CUSTOMER' ? getCustomerSession() : getSession();
   if (!session) throw new ApiError(fallback[401], 401);
 
   let response: Response;
@@ -46,7 +46,10 @@ export async function authenticatedRequest<T>(path: string, init?: RequestInit):
 
   const result = await response.json().catch(() => null) as (T & { message?: string | string[] }) | null;
   if (!response.ok) {
-    if (response.status === 401) clearSession();
+    if (response.status === 401) {
+      if (scope === 'CUSTOMER') clearCustomerSession();
+      else clearSession();
+    }
     const detail = Array.isArray(result?.message) ? result?.message[0] : result?.message;
     throw new ApiError(detail || fallback[response.status] || 'Não foi possível concluir a operação.', response.status);
   }

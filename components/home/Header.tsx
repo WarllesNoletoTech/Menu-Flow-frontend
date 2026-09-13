@@ -21,12 +21,12 @@ export function Header(props: { cities: City[]; city: string; onCityChange: (val
                 </div>
               </Link>
               <div className="lg:hidden">
-                <UserMenu />
+                <UserMenu audience="customer" />
               </div>
             </div>
 
             <div className="hidden lg:block">
-              <UserMenu />
+              <UserMenu audience="customer" />
             </div>
           </div>
 

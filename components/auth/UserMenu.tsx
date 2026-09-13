@@ -7,8 +7,12 @@ import { roleLabel } from '../../lib/auth';
 import { useAuth } from '../AuthProvider';
 import { userMenuItems } from '../dashboard/config';
 
-export function UserMenu({ returnTo = '/' }: { returnTo?: string }) {
-  const { user, loading, logout } = useAuth();
+export function UserMenu({ returnTo = '/', audience = 'staff' }: { returnTo?: string; audience?: 'staff' | 'customer' }) {
+  const auth = useAuth();
+  const customerAudience = audience === 'customer';
+  const user = customerAudience ? auth.customerUser : auth.user;
+  const loading = customerAudience ? auth.customerLoading : auth.loading;
+  const logout = customerAudience ? auth.logoutCustomer : auth.logout;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -22,7 +26,10 @@ export function UserMenu({ returnTo = '/' }: { returnTo?: string }) {
   }, []);
 
   if (loading) return <span aria-label="Verificando sessão" className="inline-block h-12 w-32 animate-pulse rounded-2xl bg-stone-200" />;
-  if (!user) return <Link className="inline-flex min-h-12 items-center rounded-2xl bg-ink px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft" href={`/login?returnTo=${encodeURIComponent(returnTo)}`}>Entrar</Link>;
+  if (!user) {
+    const loginPath = customerAudience ? '/cliente/login' : '/login';
+    return <Link className="inline-flex min-h-12 items-center rounded-2xl bg-ink px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft" href={`${loginPath}?returnTo=${encodeURIComponent(returnTo)}`}>Entrar</Link>;
+  }
 
   const initial = user.name?.trim().charAt(0).toUpperCase() || 'U';
   const firstName = user.name.trim().split(' ')[0];
