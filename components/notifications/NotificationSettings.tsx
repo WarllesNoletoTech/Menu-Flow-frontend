@@ -39,8 +39,8 @@ export function NotificationSettings({ audience }: { audience: 'admin' | 'lojist
     setLoading(true);
     try {
       let saved = await getNotificationPreferences();
-      if (saved.enabled && saved.pushAvailable && saved.publicKey && notificationPermission() === 'granted') {
-        await ensureCurrentDeviceSubscription(saved.publicKey).catch(() => undefined);
+      if (saved.enabled && saved.pushAvailable && notificationPermission() === 'granted') {
+        await ensureCurrentDeviceSubscription().catch(() => undefined);
         saved = await getNotificationPreferences();
       }
       setSettings(saved);
@@ -75,16 +75,15 @@ export function NotificationSettings({ audience }: { audience: 'admin' | 'lojist
   const enableDevice = async () => {
     setSaving(true); setMessage('');
     try {
-      if (!settings.pushAvailable || !settings.publicKey) throw new Error('O servidor de notificações ainda não está disponível.');
-      await subscribeCurrentDevice(settings.publicKey);
+      if (!settings.pushAvailable) throw new Error('O OneSignal ainda não está disponível no servidor.');
+      await subscribeCurrentDevice();
       setPermission(notificationPermission());
       setDeviceSubscribed(true);
       let next = await getNotificationPreferences();
       if (!next.enabled) next = await updateNotificationPreferences({ enabled: true });
       setSettings(next);
       window.dispatchEvent(new CustomEvent('menu-flow:notification-preferences', { detail: next }));
-      const test = await sendTestPush();
-      setMessage(test.sent > 0 ? 'Notificações ativadas. Enviamos um aviso de teste para este dispositivo.' : 'Notificações ativadas neste dispositivo.');
+      setMessage('Notificações ativadas neste dispositivo. O OneSignal enviará a mensagem de boas-vindas na primeira inscrição.');
     } catch (error) {
       setPermission(notificationPermission());
       setMessage(error instanceof Error ? error.message : 'Não foi possível ativar as notificações.');
@@ -132,13 +131,13 @@ export function NotificationSettings({ audience }: { audience: 'admin' | 'lojist
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="text-lg font-black text-stone-900">Notificações no celular ou PC</h3>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Ative neste dispositivo para receber avisos de novos pedidos mesmo com o painel fechado. Funciona no navegador e no app instalado, conforme o suporte do aparelho.</p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Ative o OneSignal neste celular ou PC para receber avisos mesmo com o Menu Flow fechado. A conta de cliente continua separada da conta do lojista.</p>
           </div>
-          {settings.deviceCount > 0 && <span className="whitespace-nowrap rounded-full bg-stone-100 px-3 py-1.5 text-xs font-black text-stone-600">{settings.deviceCount} dispositivo{settings.deviceCount === 1 ? '' : 's'} vinculado{settings.deviceCount === 1 ? '' : 's'}</span>}
+          {settings.pushAvailable && <span className="whitespace-nowrap rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">OneSignal conectado</span>}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {!settings.pushAvailable ? (
-            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">O serviço de notificações está inicializando no servidor. Atualize a página em instantes.</p>
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">O OneSignal ainda não está disponível no backend. Confirme a chave da API no Heroku e publique novamente.</p>
           ) : permission === 'denied' ? (
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">O navegador bloqueou as notificações. Libere a permissão nas configurações do site e volte a esta tela.</p>
           ) : permission === 'unsupported' ? (

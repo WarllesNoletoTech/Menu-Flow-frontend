@@ -6,6 +6,24 @@ import { defaultNotificationPreferences, ensureCurrentDeviceSubscription, getNot
 
 type OrderEvent = { orderNumber?: string; totalCents?: number; total?: number; fulfillment?: string; status?: string; restaurantName?: string };
 
+function orderNumber(value?: string) {
+  const clean = value?.trim();
+  if (!clean) return 'Pedido';
+  return clean.startsWith('#') ? clean : `#${clean}`;
+}
+
+function statusMessage(status: string | undefined, number: string) {
+  const messages: Record<string, { title: string; body: string }> = {
+    PENDING: { title: '⏳ Pedido aguardando aceitação', body: `${number} está aguardando aceitação.` },
+    ACCEPTED: { title: '✅ Pedido aceito', body: `${number} foi aceito e entrou em andamento.` },
+    PREPARING: { title: '👨‍🍳 Pedido em preparo', body: `${number} começou a ser preparado.` },
+    READY: { title: '📦 Pedido pronto', body: `${number} está pronto para a próxima etapa.` },
+    OUT_FOR_DELIVERY: { title: '🛵 Pedido saiu para entrega', body: `${number} saiu para entrega ao cliente.` },
+    COMPLETED: { title: '🎉 Pedido finalizado', body: `${number} foi concluído com sucesso.` },
+  };
+  return messages[status || ''] || { title: '🔔 Pedido atualizado', body: `${number} teve uma atualização de status.` };
+}
+
 export function DashboardNotifications({ role }: { role: Role }) {
   const preferences = useRef<NotificationPreferences>(defaultNotificationPreferences);
   const [toast, setToast] = useState<{title:string;body:string;url:string}|null>(null);
@@ -15,8 +33,8 @@ export function DashboardNotifications({ role }: { role: Role }) {
     const refresh = () => {
       void getNotificationPreferences().then(async (value) => {
         preferences.current = value;
-        if (value.enabled && value.pushAvailable && value.publicKey && notificationPermission() === 'granted') {
-          await ensureCurrentDeviceSubscription(value.publicKey).catch(() => undefined);
+        if (value.pushAvailable && notificationPermission() === 'granted') {
+          await ensureCurrentDeviceSubscription().catch(() => undefined);
         }
       }).catch(() => undefined);
     };
@@ -35,7 +53,7 @@ export function DashboardNotifications({ role }: { role: Role }) {
     window.setTimeout(() => setToast((current) => current?.body === body ? null : current), 6500);
     void hasActivePushSubscription()
       .then((active) => {
-        if (!active) return showSystemNotification(title, { body, tag, icon: '/assets/branding/menu-flow-icon-192.png', badge: '/assets/branding/menu-flow-symbol.png', url });
+        if (!active) return showSystemNotification(title, { body, tag, icon: '/assets/branding/menu-flow-notification-icon.png', badge: '/assets/branding/menu-flow-notification-icon.png', url });
         return false;
       })
       .catch(() => undefined);
@@ -47,18 +65,29 @@ export function DashboardNotifications({ role }: { role: Role }) {
     if (!prefs.enabled) return;
     const order = (raw || {}) as OrderEvent;
     const urlBase = role === 'SUPER_ADMIN' ? '/admin/pedidos' : '/empresa/pedidos';
-    const number = order.orderNumber || 'Novo pedido';
+    const number = orderNumber(order.orderNumber);
+
     if (event === 'created' && prefs.newOrder) {
       const cents = Number.isFinite(order.totalCents) ? Number(order.totalCents) : Math.round(Number(order.total || 0) * 100);
       const total = (cents / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-      const service = order.fulfillment === 'DELIVERY' ? 'Entrega' : 'Retirada';
-      const title = role === 'SUPER_ADMIN' && order.restaurantName ? `Novo pedido • ${order.restaurantName}` : 'Novo pedido recebido';
-      notify(title, `${number} • ${total} • ${service}`, `${urlBase}?status=pending`, `new-${number}`);
+      const service = order.fulfillment === 'DELIVERY' ? 'Entrega' : 'Retirada no local';
+      const title = role === 'SUPER_ADMIN' && order.restaurantName ? `🛎️ Novo pedido • ${order.restaurantName}` : '🛎️ Novo pedido recebido!';
+      const body = role === 'SUPER_ADMIN'
+        ? `${number} • ${total} • ${service}. Toque para acompanhar.`
+        : `${number} • ${total} • ${service}. Toque para abrir e aceitar o pedido.`;
+      notify(title, body, `${urlBase}?status=pending`, `new-${number}`);
       return;
     }
+
     if (event === 'updated') {
-      if ((order.status === 'CANCELLED' || order.status === 'REJECTED') && prefs.orderCancelled) notify('Pedido cancelado', `${number} foi cancelado ou recusado.`, `${urlBase}?status=cancelled`, `cancelled-${number}`);
-      else if (prefs.orderStatus) notify('Pedido atualizado', `${number} teve o status atualizado.`, urlBase, `status-${number}-${order.status || ''}`);
+      if ((order.status === 'CANCELLED' || order.status === 'REJECTED') && prefs.orderCancelled) {
+        const title = role === 'SUPER_ADMIN' && order.restaurantName ? `❌ Pedido cancelado • ${order.restaurantName}` : '❌ Pedido cancelado ou recusado';
+        notify(title, `${number} foi cancelado ou recusado. Toque para ver os detalhes.`, `${urlBase}?status=cancelled`, `cancelled-${number}`);
+      } else if (prefs.orderStatus) {
+        const status = statusMessage(order.status, number);
+        const title = role === 'SUPER_ADMIN' && order.restaurantName ? `${status.title} • ${order.restaurantName}` : status.title;
+        notify(title, status.body, urlBase, `status-${number}-${order.status || ''}`);
+      }
     }
   }, [notify, role]));
 
