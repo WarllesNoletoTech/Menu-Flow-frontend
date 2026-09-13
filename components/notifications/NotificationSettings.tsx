@@ -131,9 +131,9 @@ export function NotificationSettings({ audience }: { audience: 'admin' | 'lojist
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="text-lg font-black text-stone-900">Notificações no celular ou PC</h3>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Ative o OneSignal neste celular ou PC para receber avisos mesmo com o Menu Flow fechado. A conta de cliente continua separada da conta do lojista.</p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Ative o Push do OneSignal neste celular ou PC. Os avisos são enviados pelo sistema do aparelho, inclusive com o Menu Flow fechado; não usamos aviso interno do painel. A conta de cliente continua separada da conta do lojista.</p>
           </div>
-          {settings.pushAvailable && <span className="whitespace-nowrap rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">OneSignal conectado</span>}
+          {settings.pushAvailable && <span className="whitespace-nowrap rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">OneSignal conectado · {settings.deviceCount} {settings.deviceCount === 1 ? 'dispositivo' : 'dispositivos'}</span>}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {!settings.pushAvailable ? (

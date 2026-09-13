@@ -13,7 +13,7 @@ export type OneSignalSdk = {
   logout: () => Promise<void>;
   Notifications: {
     isPushSupported: () => boolean;
-    requestPermission: () => Promise<boolean>;
+    requestPermission: () => Promise<void>;
     permission: boolean;
   };
   User: {
@@ -70,7 +70,7 @@ function initialize(oneSignal: OneSignalSdk) {
   initPromise = oneSignal.init({
     appId: oneSignalAppId(),
     safari_web_id: safariWebId(),
-    serviceWorkerPath: '/push/onesignal/OneSignalSDKWorker.js',
+    serviceWorkerPath: 'push/onesignal/OneSignalSDKWorker.js',
     serviceWorkerParam: { scope: '/push/onesignal/' },
     autoResubscribe: true,
     notifyButton: { enable: false },
@@ -137,6 +137,10 @@ export async function optInCurrentStaff() {
     if (!oneSignal.Notifications.isPushSupported()) throw new Error('Este navegador não oferece notificações push.');
     const externalId = operationalExternalId(session.user.id);
     if (oneSignal.User.externalId !== externalId) await oneSignal.login(externalId);
+    if (!oneSignal.Notifications.permission) {
+      await oneSignal.Notifications.requestPermission();
+      if (!oneSignal.Notifications.permission) return false;
+    }
     await oneSignal.User.PushSubscription.optIn();
     // O SDK pode levar alguns instantes para receber o Subscription ID após o
     // usuário aceitar a permissão. Aguarda a confirmação antes de dizer que

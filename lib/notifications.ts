@@ -30,6 +30,43 @@ export const defaultNotificationPreferences: NotificationPreferences = {
   orderStatus: false,
 };
 
+const DEVICE_ID_KEY = 'menu-flow.onesignal-device-id.v1';
+
+function currentDeviceId() {
+  if (typeof window === 'undefined') return '';
+  const existing = localStorage.getItem(DEVICE_ID_KEY)?.trim();
+  if (existing) return existing;
+  const generated = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `mf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(DEVICE_ID_KEY, generated);
+  return generated;
+}
+
+async function saveCurrentOneSignalSubscription() {
+  const state = await oneSignalPushState();
+  if (!state.supported || !state.permission || !state.optedIn || !state.subscriptionId) return false;
+  await authenticatedRequest('/notifications/onesignal/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      subscriptionId: state.subscriptionId,
+      deviceId: currentDeviceId(),
+    }),
+  });
+  return true;
+}
+
+async function removeCurrentOneSignalSubscription(subscriptionId: string | null | undefined) {
+  if (!subscriptionId) return;
+  await authenticatedRequest('/notifications/onesignal/subscriptions', {
+    method: 'DELETE',
+    body: JSON.stringify({
+      subscriptionId,
+      deviceId: currentDeviceId(),
+    }),
+  }).catch(() => undefined);
+}
+
 export function getNotificationPreferences() {
   return authenticatedRequest<NotificationSettingsResponse>('/notifications/preferences');
 }
@@ -61,32 +98,42 @@ export async function hasActivePushSubscription() {
 }
 
 /**
- * Mantém o nome da API antiga para não quebrar os componentes existentes.
- * No OneSignal não é necessário VAPID no frontend: apenas identificamos a
- * sessão operacional e reutilizamos a inscrição persistente do navegador.
+ * Revalida a identidade do lojista/admin no OneSignal e registra o Subscription
+ * ID real no backend. O backend envia diretamente para esse ID, portanto a
+ * entrega não depende de o painel estar aberto nem do socket do navegador.
  */
 export async function ensureCurrentDeviceSubscription(_publicKey?: string | null) {
   await identifyCurrentStaffInOneSignal();
-  return hasActivePushSubscription();
+  let active = await hasActivePushSubscription();
+  if (!active && notificationPermission() === 'granted') {
+    active = await optInCurrentStaff();
+  }
+  if (!active) return false;
+  return saveCurrentOneSignalSubscription();
 }
 
 export async function subscribeCurrentDevice(_publicKey?: string | null) {
   const enabled = await optInCurrentStaff();
-  if (!enabled) throw new Error('Não foi possível ativar as notificações neste dispositivo.');
+  if (!enabled) throw new Error('Não foi possível ativar as notificações push neste dispositivo.');
+  const saved = await saveCurrentOneSignalSubscription();
+  if (!saved) throw new Error('O OneSignal não confirmou a inscrição deste dispositivo. Tente novamente.');
   return true;
 }
 
 export async function unsubscribeCurrentDevice() {
-  return optOutCurrentDevice();
+  const state = await oneSignalPushState().catch(() => null);
+  await optOutCurrentDevice();
+  await removeCurrentOneSignalSubscription(state?.subscriptionId);
+  return true;
 }
 
 /**
- * O logout operacional remove somente o External ID da inscrição OneSignal.
- * A permissão do aparelho permanece intacta para que o mesmo lojista possa
- * entrar novamente sem precisar autorizar notificações outra vez.
- * A sessão do cliente nunca chama esta função.
+ * Ao sair da conta operacional, remove o vínculo deste Subscription ID com o
+ * usuário no backend e no OneSignal. A sessão de cliente nunca chama esta rotina.
  */
 export async function detachPushSubscriptionOnLogout(_accessToken: string) {
+  const state = await oneSignalPushState().catch(() => null);
+  await removeCurrentOneSignalSubscription(state?.subscriptionId);
   await logoutOperationalOneSignal();
 }
 
@@ -94,11 +141,14 @@ export async function syncStaffPushIfAllowed() {
   try {
     const settings = await getNotificationPreferences();
     if (!settings.pushAvailable) return false;
-    // Sempre troca o External ID para a conta operacional atual. Assim um login
-    // de lojista/admin nunca herda o vínculo OneSignal de outro usuário do aparelho.
     await identifyCurrentStaffInOneSignal();
     if (!settings.enabled) return false;
-    return hasActivePushSubscription();
+    let active = await hasActivePushSubscription();
+    if (!active && notificationPermission() === 'granted') {
+      active = await optInCurrentStaff();
+    }
+    if (!active) return false;
+    return saveCurrentOneSignalSubscription();
   } catch {
     return false;
   }
@@ -106,24 +156,4 @@ export async function syncStaffPushIfAllowed() {
 
 export function sendTestPush() {
   return authenticatedRequest<{ok:boolean;sent:number}>('/notifications/test', { method: 'POST' });
-}
-
-export async function showSystemNotification(title: string, options: NotificationOptions & { url?: string }) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
-  const { url, ...notificationOptions } = options;
-  try {
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, {
-        ...notificationOptions,
-        data: { ...(notificationOptions.data as Record<string, unknown> | undefined), url: url || '/' },
-      });
-      return true;
-    }
-    const notification = new Notification(title, notificationOptions);
-    if (url) notification.onclick = () => { window.focus(); window.location.href = url; };
-    return true;
-  } catch {
-    return false;
-  }
 }
