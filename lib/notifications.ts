@@ -139,9 +139,12 @@ export async function detachPushSubscriptionOnLogout(_accessToken: string) {
 
 export async function syncStaffPushIfAllowed() {
   try {
+    // Vincula a sessão operacional ao External ID do OneSignal primeiro. Assim a
+    // inscrição continua pertencendo ao lojista/admin mesmo se a leitura das
+    // preferências do backend falhar momentaneamente.
+    await identifyCurrentStaffInOneSignal();
     const settings = await getNotificationPreferences();
     if (!settings.pushAvailable) return false;
-    await identifyCurrentStaffInOneSignal();
     if (!settings.enabled) return false;
     let active = await hasActivePushSubscription();
     if (!active && notificationPermission() === 'granted') {
