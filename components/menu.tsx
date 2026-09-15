@@ -90,7 +90,7 @@ export function Menu({ slug }: { slug: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [checkout, setCheckout] = useState(false);
-  const [authGate, setAuthGate] = useState<'welcome'|'login'|'register'>();
+  const [authGate, setAuthGate] = useState<'login'|'register'>();
   const [selectedProduct, setSelectedProduct] = useState<Product>();
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [selectedObservation, setSelectedObservation] = useState('');
@@ -170,24 +170,37 @@ export function Menu({ slug }: { slug: string }) {
     if (restaurant) setFulfillment(canOfferDelivery(restaurant) ? 'DELIVERY' : 'PICKUP');
     const session = getCustomerSession();
     if (!session || session.user.role !== 'CUSTOMER') {
-      setAuthGate('welcome');
+      setAuthGate('register');
       return;
     }
     try {
       const response = await fetch(apiUrl('/auth/me'), { headers: { Authorization: `Bearer ${session.accessToken}` }, cache: 'no-store' });
-      if (!response.ok) throw new Error();
+      if (response.status === 401 || response.status === 403) {
+        clearCustomerSession();
+        logout();
+        setMessage('Sua sessão expirou. Entre novamente para continuar.');
+        setAuthGate('login');
+        return;
+      }
+      if (!response.ok) {
+        // Erros temporários da API não devem apagar o login salvo do cliente.
+        setCheckout(true);
+        return;
+      }
       const profile = await response.json() as AuthSession['user'];
       if (profile.role !== 'CUSTOMER') {
-        setAuthGate('welcome');
+        clearCustomerSession();
+        logout();
+        setAuthGate('register');
         return;
       }
       setAuthGate(undefined);
       setCheckout(true);
     } catch {
-      clearCustomerSession();
-      logout();
-      setMessage('Sua sessão expirou. Entre novamente para continuar.');
-      setAuthGate('login');
+      // Falha de conexão não deve deslogar o cliente. A API do pedido fará
+      // a validação final quando a conexão estiver disponível.
+      setAuthGate(undefined);
+      setCheckout(true);
     }
   };
   const authenticated = (session: AuthSession) => {
@@ -245,8 +258,8 @@ export function Menu({ slug }: { slug: string }) {
     const customerSession = getCustomerSession();
     if (!customerSession || customerSession.user.role !== 'CUSTOMER') {
       setCheckout(false);
-      setAuthGate('welcome');
-      setMessage('Entre ou crie uma conta de cliente para finalizar seu pedido.');
+      setAuthGate('register');
+      setMessage('Crie sua conta de cliente para finalizar seu pedido.');
       return;
     }
     setSubmitting(true);
@@ -511,7 +524,7 @@ function CartRow({ item, addonPrice, setQuantity }: { item: CartItem; addonPrice
 }
 
 function MobileCartBar({ count, subtotal, open, requiresCustomerAuth }: { count: number; subtotal: number; open: () => void; requiresCustomerAuth: boolean }) {
-  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/96 px-3 pt-2 shadow-[0_-14px_36px_rgba(41,37,36,.12)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'max(.65rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10"><span className="flex min-w-0 items-center gap-3"><span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10"><BagIcon /><span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-ink">{count}</span></span><span className="truncate text-sm">{requiresCustomerAuth ? 'Entrar para finalizar' : 'Ver sua sacola'}</span></span><span className="shrink-0 whitespace-nowrap text-sm">{money(subtotal)} →</span></button></aside>;
+  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/96 px-3 pt-2 shadow-[0_-14px_36px_rgba(41,37,36,.12)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'max(.65rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10"><span className="flex min-w-0 items-center gap-3"><span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10"><BagIcon /><span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-ink">{count}</span></span><span className="truncate text-sm">{requiresCustomerAuth ? 'Criar conta para finalizar' : 'Ver sua sacola'}</span></span><span className="shrink-0 whitespace-nowrap text-sm">{money(subtotal)} →</span></button></aside>;
 }
 
 function ModalFrame({ label, close, children, sheet = false }: { label: string; close: () => void; children: React.ReactNode; sheet?: boolean }) {
@@ -522,10 +535,11 @@ function ProductModal({ product, selected, observation, setObservation, toggle, 
   return <ModalFrame label={`Personalizar ${product.name}`} close={close} sheet><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="break-words text-xl font-black sm:text-2xl">{product.name}</h2><p className="mt-1 text-sm text-stone-500">{product.description}</p></div><button type="button" aria-label="Fechar produto" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div>{(product.addonGroups ?? []).map((group) => <fieldset key={group.name} className="mt-5 border-t pt-4"><legend className="font-bold">{group.name} {group.required && <span className="text-danger">* obrigatório</span>}</legend><p className="mt-1 text-xs text-stone-500">Escolha de {group.min ?? (group.required ? 1 : 0)} a {group.max} opções{group.pricingMode === 'MAX' ? ' · se escolher mais de uma, será cobrada somente a mais cara' : ''}</p>{group.addons.map((addon) => <label key={addon.name} className="mt-3 flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3"><span className="break-words"><input className="mr-3 h-5 w-5 align-middle accent-primary" type="checkbox" checked={selected.includes(addon.name)} onChange={() => toggle(group, addon.name)} />{addon.name}</span><b className="shrink-0 whitespace-nowrap">{addon.price > 0 ? `+ ${money(addon.price)}` : 'Grátis'}</b></label>)}</fieldset>)}<div className="mt-5 border-t pt-4"><label className="block font-bold" htmlFor={`observation-${product._id}`}>Observação para este item <span className="font-medium text-stone-400">(opcional)</span></label><p className="mt-1 text-xs text-stone-500">Ex.: retirar cebola, sem molho, cortar ao meio.</p><textarea id={`observation-${product._id}`} maxLength={500} rows={3} value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="Escreva aqui uma observação para o preparo..." className="field min-h-24 resize-y" /><div className="mt-1 text-right text-[11px] font-semibold text-stone-400">{observation.length}/500</div></div><button type="button" disabled={!canAdd} onClick={confirm} className="sticky bottom-0 mt-4 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">ADICIONAR · {money(total)}</button></ModalFrame>;
 }
 
-function CustomerAuthModal({mode,setMode,close,complete,wrongRole}:{mode:'welcome'|'login'|'register';setMode:(mode:'welcome'|'login'|'register')=>void;close:()=>void;complete:(session:AuthSession)=>void;wrongRole:boolean}) {
+function CustomerAuthModal({mode,setMode,close,complete,wrongRole}:{mode:'login'|'register';setMode:(mode:'login'|'register')=>void;close:()=>void;complete:(session:AuthSession)=>void;wrongRole:boolean}) {
   const [error,setError]=useState(''); const [loading,setLoading]=useState(false); const [duplicate,setDuplicate]=useState(false);
   async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);if(mode==='register'&&form.get('password')!==form.get('confirmPassword')){setError('As senhas não coincidem.');return}const payload=customerAuthPayload(mode === 'register' ? 'register' : 'login',form);setLoading(true);setError('');setDuplicate(false);try{const response=await fetch(apiUrl(mode==='register'?'/auth/customer/register':'/auth/login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await response.json().catch(()=>null) as AuthSession&{message?:string|string[]};if(!response.ok){if(mode==='register'&&response.status===409){setDuplicate(true);throw new Error('Já existe uma conta com este e-mail. Entre para continuar.')}if(mode==='login'&&response.status===401)throw new Error('E-mail ou senha incorretos.');throw new Error(mode==='login'?'Não foi possível entrar agora. Tente novamente.':'Não foi possível criar a conta agora. Tente novamente.')}if(!data.accessToken||!data.user)throw new Error('Não foi possível entrar agora. Tente novamente.');if(data.user.role!=='CUSTOMER')throw new Error('Para realizar pedidos, entre com uma conta de cliente.');complete(data)}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível entrar agora. Tente novamente.')}finally{setLoading(false)}}
-  return <ModalFrame label="Entre para continuar" close={close} sheet><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-black">Entre para continuar</h2><p className="mt-2 text-stone-600">{wrongRole?'Para realizar pedidos, entre com uma conta de cliente.':'Para finalizar seu pedido, entre na sua conta ou crie um cadastro.'}</p></div><button aria-label="Fechar autenticação" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div>{mode==='welcome'?<div className="mt-7 grid gap-3"><button onClick={()=>setMode('login')} className="min-h-14 rounded-xl bg-ink font-black text-white">ENTRAR</button><p className="text-center text-sm text-stone-500">Ainda não possui cadastro?</p><button onClick={()=>setMode('register')} className="min-h-14 rounded-xl border font-black">CRIAR CONTA</button></div>:<form onSubmit={submit} className="mt-6">{mode==='register'&&<div className="grid gap-3 sm:grid-cols-2"><label className="font-bold">Nome<input name="name" required className="field"/></label><label className="font-bold">Telefone<input name="phone" required inputMode="tel" className="field"/></label></div>}<label className="mt-3 block font-bold">E-mail<input name="email" required type="email" autoComplete="email" className="field"/></label><label className="mt-3 block font-bold">Senha<PasswordField name="password" required minLength={8} autoComplete={mode==='register'?'new-password':'current-password'} className="field"/></label>{mode==='register'&&<label className="mt-3 block font-bold">Confirmar senha<PasswordField name="confirmPassword" required minLength={8} autoComplete="new-password" className="field"/></label>}{error&&<p role="alert" className="mt-4 rounded-xl bg-danger/10 p-3 font-bold text-danger">{error}</p>}<button disabled={loading} className="mt-5 min-h-14 w-full rounded-xl bg-ink font-black text-white disabled:opacity-50">{loading?'AGUARDE…':mode==='register'?'CRIAR CONTA':'ENTRAR'}</button>{mode==='login'&&<a href="/cliente/login" className="mt-4 block text-center text-sm font-bold underline">Esqueci minha senha</a>}<button type="button" onClick={()=>{setMode(mode==='login'?'register':'login');setError('');setDuplicate(false)}} className="mt-4 min-h-11 w-full text-sm font-bold underline">{mode==='login'?'Ainda não tenho conta — criar cadastro':duplicate?'Entrar':'Já tenho uma conta'}</button></form>}</ModalFrame>;
+  const registering=mode==='register';
+  return <ModalFrame label={registering?'Criar conta':'Entrar na conta'} close={close} sheet><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-black">{registering?'Crie sua conta':'Entre na sua conta'}</h2><p className="mt-2 text-stone-600">{wrongRole?'Para realizar pedidos, use uma conta de cliente.':registering?'Faça um cadastro rápido para finalizar seu pedido. Depois, sua conta ficará conectada neste aparelho.':'Entre com sua conta de cliente para continuar.'}</p></div><button aria-label="Fechar autenticação" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div><form onSubmit={submit} className="mt-6">{registering&&<div className="grid gap-3 sm:grid-cols-2"><label className="font-bold">Nome<input name="name" required className="field"/></label><label className="font-bold">Telefone<input name="phone" required inputMode="tel" className="field"/></label></div>}<label className="mt-3 block font-bold">E-mail<input name="email" required type="email" autoComplete="email" className="field"/></label><label className="mt-3 block font-bold">Senha<PasswordField name="password" required minLength={8} autoComplete={registering?'new-password':'current-password'} className="field"/></label>{registering&&<label className="mt-3 block font-bold">Confirmar senha<PasswordField name="confirmPassword" required minLength={8} autoComplete="new-password" className="field"/></label>}{error&&<p role="alert" className="mt-4 rounded-xl bg-danger/10 p-3 font-bold text-danger">{error}</p>}<button disabled={loading} className="mt-5 min-h-14 w-full rounded-xl bg-ink font-black text-white disabled:opacity-50">{loading?'AGUARDE…':registering?'CRIAR CONTA':'ENTRAR'}</button>{mode==='login'&&<a href="/cliente/login" className="mt-4 block text-center text-sm font-bold underline">Esqueci minha senha</a>}<button type="button" onClick={()=>{setMode(mode==='login'?'register':'login');setError('');setDuplicate(false)}} className="mt-4 min-h-11 w-full text-sm font-bold underline">{mode==='login'?'Ainda não tenho conta — criar cadastro':duplicate?'Entrar':'Já tenho uma conta — entrar'}</button></form></ModalFrame>;
 }
 
 function CheckoutModal({ restaurant, cart, subtotal, addonPrice, setQuantity, close, submit, fulfillment, setFulfillment, customer, submitting }: { restaurant: Restaurant; cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; close: () => void; submit: (event: FormEvent<HTMLFormElement>) => void; fulfillment: 'PICKUP' | 'DELIVERY'; setFulfillment: (value: 'PICKUP' | 'DELIVERY') => void; customer?: { name: string; phone?: string }; submitting: boolean }) {
