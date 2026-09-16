@@ -3,13 +3,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { apiUrl } from '../lib/api';
 import { paymentMethodLabel } from '../lib/payment-methods';
-import { clearCustomerSession, getCustomerSession, type AuthSession } from '../lib/auth';
-import { PasswordField } from './auth/PasswordField';
+import { clearCustomerSession, getCustomerSession } from '../lib/auth';
 import { useAuth } from './AuthProvider';
 import { UserMenu } from './auth/UserMenu';
 import { canOfferDelivery } from '../lib/fulfillment';
 import { legacyEstablishmentLabel } from '../lib/public-restaurants';
-import { customerAuthPayload } from '../lib/customer-auth';
 import Link from 'next/link';
 import { BrandLogo } from './BrandLogo';
 
@@ -84,13 +82,12 @@ function nextOpeningText(restaurant: Restaurant, now = new Date()) {
 
 
 export function Menu({ slug }: { slug: string }) {
-  const { customerUser: user, loginCustomer: login, logoutCustomer: logout } = useAuth();
+  const { customerUser: user, logoutCustomer: logout } = useAuth();
   const [restaurant, setRestaurant] = useState<Restaurant>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [checkout, setCheckout] = useState(false);
-  const [authGate, setAuthGate] = useState<'login'|'register'>();
   const [selectedProduct, setSelectedProduct] = useState<Product>();
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [selectedObservation, setSelectedObservation] = useState('');
@@ -150,63 +147,22 @@ export function Menu({ slug }: { slug: string }) {
   }, [cart, cartKey, hydratedCartKey]);
 
   useEffect(() => {
-    if (!selectedProduct && !checkout && !authGate) return;
+    if (!selectedProduct && !checkout) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSelectedProduct(undefined);
         setCheckout(false);
-        setAuthGate(undefined);
       }
     };
     document.addEventListener('keydown', close);
     return () => { document.body.style.overflow = previous; document.removeEventListener('keydown', close); };
-  }, [selectedProduct, checkout, authGate]);
+  }, [selectedProduct, checkout]);
 
-  const openCheckout = async () => {
+  const openCheckout = () => {
     setMessage(undefined);
-    setCheckout(false);
     if (restaurant) setFulfillment(canOfferDelivery(restaurant) ? 'DELIVERY' : 'PICKUP');
-    const session = getCustomerSession();
-    if (!session || session.user.role !== 'CUSTOMER') {
-      setAuthGate('register');
-      return;
-    }
-    try {
-      const response = await fetch(apiUrl('/auth/me'), { headers: { Authorization: `Bearer ${session.accessToken}` }, cache: 'no-store' });
-      if (response.status === 401 || response.status === 403) {
-        clearCustomerSession();
-        logout();
-        setMessage('Sua sessão expirou. Entre novamente para continuar.');
-        setAuthGate('login');
-        return;
-      }
-      if (!response.ok) {
-        // Erros temporários da API não devem apagar o login salvo do cliente.
-        setCheckout(true);
-        return;
-      }
-      const profile = await response.json() as AuthSession['user'];
-      if (profile.role !== 'CUSTOMER') {
-        clearCustomerSession();
-        logout();
-        setAuthGate('register');
-        return;
-      }
-      setAuthGate(undefined);
-      setCheckout(true);
-    } catch {
-      // Falha de conexão não deve deslogar o cliente. A API do pedido fará
-      // a validação final quando a conexão estiver disponível.
-      setAuthGate(undefined);
-      setCheckout(true);
-    }
-  };
-  const authenticated = (session: AuthSession) => {
-    login(session);
-    setMessage(undefined);
-    setAuthGate(undefined);
     setCheckout(true);
   };
 
@@ -256,12 +212,6 @@ export function Menu({ slug }: { slug: string }) {
     event.preventDefault();
     if (!restaurant || submitting) return;
     const customerSession = getCustomerSession();
-    if (!customerSession || customerSession.user.role !== 'CUSTOMER') {
-      setCheckout(false);
-      setAuthGate('register');
-      setMessage('Crie sua conta de cliente para finalizar seu pedido.');
-      return;
-    }
     setSubmitting(true);
     // Reserve a user-initiated tab before the asynchronous POST; navigate it only after the order is saved.
     const whatsappWindow = restaurant.orderWhatsapp ? window.open('about:blank', '_blank') : null;
@@ -276,9 +226,21 @@ export function Menu({ slug }: { slug: string }) {
       items: cart.map(({ _id, quantity, addonNames, addonGroups, observation }) => ({ productId: _id, quantity, observation: observation || undefined, addons: addonNames.map(name => { const group = (addonGroups ?? []).find(g => g.addons.some(a => a.name === name))!; const addon = group.addons.find(a => a.name === name)!; return { groupId: group._id, addonId: addon._id }; }) })),
     };
     try {
-      const response = await fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(), Authorization: `Bearer ${customerSession.accessToken}` }, body: JSON.stringify(payload) });
+      const idempotencyKey = crypto.randomUUID();
+      const sendOrder = (withCustomerSession: boolean) => {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey };
+        if (withCustomerSession && customerSession?.user.role === 'CUSTOMER') headers.Authorization = `Bearer ${customerSession.accessToken}`;
+        return fetch(apiUrl(`/restaurants/${restaurant._id}/orders`), { method: 'POST', headers, body: JSON.stringify(payload) });
+      };
+      let response = await sendOrder(Boolean(customerSession?.accessToken && customerSession.user.role === 'CUSTOMER'));
+      // Uma sessão antiga nunca deve impedir o pedido: se o token expirou,
+      // remove somente a sessão de cliente e repete o checkout como visitante.
+      if (response.status === 401 && customerSession?.user.role === 'CUSTOMER') {
+        clearCustomerSession();
+        logout();
+        response = await sendOrder(false);
+      }
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) { whatsappWindow?.close(); clearCustomerSession(); logout(); setCheckout(false); setAuthGate('login'); setMessage(response.status === 401 ? 'Sua sessão expirou. Entre novamente para continuar.' : 'Para realizar pedidos, entre com uma conta de cliente.'); return; }
         const data = await response.json().catch(() => null) as { message?: string | string[] } | null;
         setMessage(Array.isArray(data?.message) ? data.message[0] : data?.message ?? 'Não foi possível enviar o pedido');
         whatsappWindow?.close(); return;
@@ -343,16 +305,15 @@ export function Menu({ slug }: { slug: string }) {
 
           <aside className="hidden lg:block">
             <div className="sticky top-6">
-              <CartPanel cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} checkout={openCheckout} requiresCustomerAuth={user?.role !== 'CUSTOMER'} />
+              <CartPanel cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} checkout={openCheckout} />
             </div>
           </aside>
         </div>
       </div>
 
       {selectedProduct && <ProductModal product={selectedProduct} selected={selectedAddons} observation={selectedObservation} setObservation={setSelectedObservation} toggle={toggleAddon} close={() => { setSelectedProduct(undefined); setSelectedObservation(''); }} canAdd={canAddSelectedProduct} total={(selectedProduct.promotionalPrice ?? selectedProduct.price) + addonPrice(selectedProduct, selectedAddons)} confirm={() => { add(selectedProduct, selectedAddons, selectedObservation); setSelectedProduct(undefined); setSelectedObservation(''); }} />}
-      {cart.length > 0 && <MobileCartBar count={itemCount} subtotal={subtotal} open={openCheckout} requiresCustomerAuth={user?.role !== 'CUSTOMER'} />}
+      {cart.length > 0 && <MobileCartBar count={itemCount} subtotal={subtotal} open={openCheckout} />}
       {checkout && <CheckoutModal restaurant={restaurant} cart={cart} subtotal={subtotal} addonPrice={addonPrice} setQuantity={setQuantity} close={() => setCheckout(false)} submit={submit} fulfillment={fulfillment} setFulfillment={setFulfillment} customer={user?.role === 'CUSTOMER' ? user : undefined} submitting={submitting} />}
-      {authGate && <CustomerAuthModal mode={authGate} setMode={setAuthGate} close={() => setAuthGate(undefined)} complete={authenticated} wrongRole={Boolean(user && user.role !== 'CUSTOMER')} />}
     </main>
   );
 }
@@ -497,7 +458,7 @@ function ProductCard({ product, open, add }: { product: Product; open: boolean; 
   </article>;
 }
 
-function CartPanel({ cart, subtotal, addonPrice, setQuantity, checkout, requiresCustomerAuth }: { cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; checkout: () => void; requiresCustomerAuth: boolean }) {
+function CartPanel({ cart, subtotal, addonPrice, setQuantity, checkout }: { cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; checkout: () => void }) {
   const count = cart.reduce((total, item) => total + item.quantity, 0);
   return <section className="overflow-hidden rounded-[30px] border border-border/90 bg-white shadow-[0_20px_55px_rgba(41,37,36,.10)]">
     <div className="flex items-center gap-3 border-b border-border px-5 py-5">
@@ -507,8 +468,8 @@ function CartPanel({ cart, subtotal, addonPrice, setQuantity, checkout, requires
     {cart.length === 0 ? <div className="px-5 py-12 text-center text-stone-500"><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-background text-ink"><BagIcon /></span><p className="mt-4 font-black text-stone-700">Sua sacola está vazia</p><p className="mx-auto mt-1 max-w-[220px] text-sm leading-5">Adicione produtos do cardápio para começar.</p></div> : <div className="p-5">
       <div className="divide-y divide-border">{cart.map((item) => <CartRow key={`${item._id}-${item.addonNames.join()}-${item.observation}`} item={item} addonPrice={addonPrice} setQuantity={setQuantity} />)}</div>
       <div className="mt-5 rounded-[24px] border border-border bg-background/70 p-4"><div className="flex items-center justify-between gap-4"><span className="text-sm font-semibold text-stone-500">Subtotal</span><b className="whitespace-nowrap text-lg">{money(subtotal)}</b></div><p className="mt-2 text-xs leading-5 text-stone-400">Taxas e forma de entrega são confirmadas na finalização.</p></div>
-      {requiresCustomerAuth && <p className="mt-3 rounded-[22px] border border-border bg-white p-3 text-xs font-semibold leading-5 text-stone-600">Para finalizar, entre na sua conta de cliente ou crie um cadastro. Sua sacola será mantida.</p>}
-      <button type="button" onClick={checkout} className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10 hover:bg-primary-hover">{requiresCustomerAuth ? 'ENTRAR PARA FINALIZAR' : 'FINALIZAR PEDIDO'}<span aria-hidden>→</span></button>
+      <p className="mt-3 text-xs font-semibold leading-5 text-stone-500">Não precisa criar conta. Informe apenas seus dados de contato e, para entrega, o endereço.</p>
+      <button type="button" onClick={checkout} className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10 hover:bg-primary-hover">FINALIZAR PEDIDO<span aria-hidden>→</span></button>
     </div>}
   </section>;
 }
@@ -523,8 +484,8 @@ function CartRow({ item, addonPrice, setQuantity }: { item: CartItem; addonPrice
   </div>;
 }
 
-function MobileCartBar({ count, subtotal, open, requiresCustomerAuth }: { count: number; subtotal: number; open: () => void; requiresCustomerAuth: boolean }) {
-  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/96 px-3 pt-2 shadow-[0_-14px_36px_rgba(41,37,36,.12)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'max(.65rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10"><span className="flex min-w-0 items-center gap-3"><span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10"><BagIcon /><span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-ink">{count}</span></span><span className="truncate text-sm">{requiresCustomerAuth ? 'Criar conta para finalizar' : 'Ver sua sacola'}</span></span><span className="shrink-0 whitespace-nowrap text-sm">{money(subtotal)} →</span></button></aside>;
+function MobileCartBar({ count, subtotal, open }: { count: number; subtotal: number; open: () => void }) {
+  return <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/96 px-3 pt-2 shadow-[0_-14px_36px_rgba(41,37,36,.12)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'max(.65rem, env(safe-area-inset-bottom))' }}><button type="button" onClick={open} className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between gap-3 rounded-[22px] bg-ink px-4 font-black text-white shadow-lg shadow-ink/10"><span className="flex min-w-0 items-center gap-3"><span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10"><BagIcon /><span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-ink">{count}</span></span><span className="truncate text-sm">Finalizar pedido</span></span><span className="shrink-0 whitespace-nowrap text-sm">{money(subtotal)} →</span></button></aside>;
 }
 
 function ModalFrame({ label, close, children, sheet = false }: { label: string; close: () => void; children: React.ReactNode; sheet?: boolean }) {
@@ -533,13 +494,6 @@ function ModalFrame({ label, close, children, sheet = false }: { label: string; 
 
 function ProductModal({ product, selected, observation, setObservation, toggle, close, canAdd, total, confirm }: { product: Product; selected: string[]; observation: string; setObservation: (value: string) => void; toggle: (group: AddonGroup, name: string) => void; close: () => void; canAdd: boolean; total: number; confirm: () => void }) {
   return <ModalFrame label={`Personalizar ${product.name}`} close={close} sheet><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="break-words text-xl font-black sm:text-2xl">{product.name}</h2><p className="mt-1 text-sm text-stone-500">{product.description}</p></div><button type="button" aria-label="Fechar produto" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div>{(product.addonGroups ?? []).map((group) => <fieldset key={group.name} className="mt-5 border-t pt-4"><legend className="font-bold">{group.name} {group.required && <span className="text-danger">* obrigatório</span>}</legend><p className="mt-1 text-xs text-stone-500">Escolha de {group.min ?? (group.required ? 1 : 0)} a {group.max} opções{group.pricingMode === 'MAX' ? ' · se escolher mais de uma, será cobrada somente a mais cara' : ''}</p>{group.addons.map((addon) => <label key={addon.name} className="mt-3 flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3"><span className="break-words"><input className="mr-3 h-5 w-5 align-middle accent-primary" type="checkbox" checked={selected.includes(addon.name)} onChange={() => toggle(group, addon.name)} />{addon.name}</span><b className="shrink-0 whitespace-nowrap">{addon.price > 0 ? `+ ${money(addon.price)}` : 'Grátis'}</b></label>)}</fieldset>)}<div className="mt-5 border-t pt-4"><label className="block font-bold" htmlFor={`observation-${product._id}`}>Observação para este item <span className="font-medium text-stone-400">(opcional)</span></label><p className="mt-1 text-xs text-stone-500">Ex.: retirar cebola, sem molho, cortar ao meio.</p><textarea id={`observation-${product._id}`} maxLength={500} rows={3} value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="Escreva aqui uma observação para o preparo..." className="field min-h-24 resize-y" /><div className="mt-1 text-right text-[11px] font-semibold text-stone-400">{observation.length}/500</div></div><button type="button" disabled={!canAdd} onClick={confirm} className="sticky bottom-0 mt-4 min-h-14 w-full rounded-xl bg-ink px-4 font-black text-white disabled:opacity-40">ADICIONAR · {money(total)}</button></ModalFrame>;
-}
-
-function CustomerAuthModal({mode,setMode,close,complete,wrongRole}:{mode:'login'|'register';setMode:(mode:'login'|'register')=>void;close:()=>void;complete:(session:AuthSession)=>void;wrongRole:boolean}) {
-  const [error,setError]=useState(''); const [loading,setLoading]=useState(false); const [duplicate,setDuplicate]=useState(false);
-  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);if(mode==='register'&&form.get('password')!==form.get('confirmPassword')){setError('As senhas não coincidem.');return}const payload=customerAuthPayload(mode === 'register' ? 'register' : 'login',form);setLoading(true);setError('');setDuplicate(false);try{const response=await fetch(apiUrl(mode==='register'?'/auth/customer/register':'/auth/login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await response.json().catch(()=>null) as AuthSession&{message?:string|string[]};if(!response.ok){if(mode==='register'&&response.status===409){setDuplicate(true);throw new Error('Já existe uma conta com este e-mail. Entre para continuar.')}if(mode==='login'&&response.status===401)throw new Error('E-mail ou senha incorretos.');throw new Error(mode==='login'?'Não foi possível entrar agora. Tente novamente.':'Não foi possível criar a conta agora. Tente novamente.')}if(!data.accessToken||!data.user)throw new Error('Não foi possível entrar agora. Tente novamente.');if(data.user.role!=='CUSTOMER')throw new Error('Para realizar pedidos, entre com uma conta de cliente.');complete(data)}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível entrar agora. Tente novamente.')}finally{setLoading(false)}}
-  const registering=mode==='register';
-  return <ModalFrame label={registering?'Criar conta':'Entrar na conta'} close={close} sheet><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-black">{registering?'Crie sua conta':'Entre na sua conta'}</h2><p className="mt-2 text-stone-600">{wrongRole?'Para realizar pedidos, use uma conta de cliente.':registering?'Faça um cadastro rápido para finalizar seu pedido. Depois, sua conta ficará conectada neste aparelho.':'Entre com sua conta de cliente para continuar.'}</p></div><button aria-label="Fechar autenticação" onClick={close} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border">✕</button></div><form onSubmit={submit} className="mt-6">{registering&&<div className="grid gap-3 sm:grid-cols-2"><label className="font-bold">Nome<input name="name" required className="field"/></label><label className="font-bold">Telefone<input name="phone" required inputMode="tel" className="field"/></label></div>}<label className="mt-3 block font-bold">E-mail<input name="email" required type="email" autoComplete="email" className="field"/></label><label className="mt-3 block font-bold">Senha<PasswordField name="password" required minLength={8} autoComplete={registering?'new-password':'current-password'} className="field"/></label>{registering&&<label className="mt-3 block font-bold">Confirmar senha<PasswordField name="confirmPassword" required minLength={8} autoComplete="new-password" className="field"/></label>}{error&&<p role="alert" className="mt-4 rounded-xl bg-danger/10 p-3 font-bold text-danger">{error}</p>}<button disabled={loading} className="mt-5 min-h-14 w-full rounded-xl bg-ink font-black text-white disabled:opacity-50">{loading?'AGUARDE…':registering?'CRIAR CONTA':'ENTRAR'}</button>{mode==='login'&&<a href="/cliente/login" className="mt-4 block text-center text-sm font-bold underline">Esqueci minha senha</a>}<button type="button" onClick={()=>{setMode(mode==='login'?'register':'login');setError('');setDuplicate(false)}} className="mt-4 min-h-11 w-full text-sm font-bold underline">{mode==='login'?'Ainda não tenho conta — criar cadastro':duplicate?'Entrar':'Já tenho uma conta — entrar'}</button></form></ModalFrame>;
 }
 
 function CheckoutModal({ restaurant, cart, subtotal, addonPrice, setQuantity, close, submit, fulfillment, setFulfillment, customer, submitting }: { restaurant: Restaurant; cart: CartItem[]; subtotal: number; addonPrice: (p: Product, n: string[]) => number; setQuantity: (item: CartItem, quantity: number) => void; close: () => void; submit: (event: FormEvent<HTMLFormElement>) => void; fulfillment: 'PICKUP' | 'DELIVERY'; setFulfillment: (value: 'PICKUP' | 'DELIVERY') => void; customer?: { name: string; phone?: string }; submitting: boolean }) {
