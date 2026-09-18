@@ -1,0 +1,36 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useEmpresa } from '../../../components/empresa/EmpresaContext';
+
+type Estimate = { period: string; revenueCents: number; completedOrderCount: number; amountCents: number; tier: { minRevenueCents: number; maxRevenueCents: number|null; amountCents: number }; plan: { name: string } };
+type Invoice = { _id: string; period: string; revenueCents?: number; amountCents: number; status: 'OPEN'|'PAID'|'OVERDUE'|'WAIVED'|'CANCELLED'; dueDate?: string };
+type Response = { period: string; estimate: Estimate; invoices: Invoice[]; paymentSettings?: { pixReceiverName?: string; pixKey?: string } };
+const money = (cents = 0) => (cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const currentPeriod = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const labelPeriod = (period:string) => { const [y,m]=period.split('-').map(Number); return new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(new Date(y,m-1,1)); };
+const statusLabel:Record<string,string>={OPEN:'Pendente',PAID:'Pago',OVERDUE:'Vencido',WAIVED:'Isento',CANCELLED:'Cancelado'};
+const statusTone:Record<string,string>={OPEN:'bg-amber-50 text-amber-800',PAID:'bg-emerald-50 text-emerald-800',OVERDUE:'bg-red-50 text-red-700',WAIVED:'bg-blue-50 text-blue-700',CANCELLED:'bg-stone-100 text-stone-600'};
+
+export default function Page(){
+  const { request } = useEmpresa();
+  const [data,setData]=useState<Response>();
+  const [message,setMessage]=useState('');
+  const period=useMemo(currentPeriod,[]);
+  useEffect(()=>{request<Response>(`/billing/me?period=${period}`,{cache:'no-store'}).then(setData).catch((e)=>setMessage(e instanceof Error?e.message:'Não foi possível carregar sua assinatura.'));},[period,request]);
+  if(!data) return <section className="mx-auto max-w-6xl"><div className="h-56 animate-pulse rounded-[30px] bg-stone-200" />{message&&<p className="mt-4 rounded-2xl border bg-white p-4">{message}</p>}</section>;
+  const estimate=data.estimate;
+  const max=estimate.tier.maxRevenueCents;
+  const next=max===null?null:max-estimate.revenueCents+1;
+  const progress=max===null?100:Math.min(100,Math.max(0,(estimate.revenueCents/Math.max(1,max))*100));
+  return <section className="mx-auto max-w-6xl space-y-6">
+    <header className="overflow-hidden rounded-[32px] bg-gradient-to-r from-ink via-[#6f1c21] to-[#8f242a] p-6 text-white shadow-xl sm:p-7"><p className="text-[10px] font-black uppercase tracking-[.22em] text-lime">Menu Flow</p><h1 className="mt-2 text-3xl font-black">Minha assinatura</h1><p className="mt-2 max-w-2xl text-sm text-white/75">Sua mensalidade acompanha o faturamento pelo Menu Flow. Sem comissão por pedido.</p><div className="mt-5 grid gap-3 sm:grid-cols-3"><Card label="Faturamento deste mês" value={money(estimate.revenueCents)} /><Card label="Mensalidade estimada" value={money(estimate.amountCents)} /><Card label="Vendas consideradas" value={String(estimate.completedOrderCount)} /></div></header>
+    <section className="rounded-[28px] border bg-white p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.15em] text-primary">Faixa atual · {labelPeriod(period)}</p><h2 className="mt-2 text-2xl font-black">{max===null?`Acima de ${money(estimate.tier.minRevenueCents-1)}`:`${money(estimate.tier.minRevenueCents)} a ${money(max)}`}</h2><p className="mt-1 text-sm text-stone-500">Estimativa enquanto o mês ainda está aberto. A cobrança é fechada com base no mês completo.</p></div><strong className="rounded-2xl bg-primary/10 px-5 py-3 text-2xl font-black text-primary">{money(estimate.amountCents)}</strong></div><div className="mt-5 h-3 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-primary" style={{width:`${progress}%`}} /></div><div className="mt-2 flex justify-between gap-3 text-xs font-bold text-stone-500"><span>{money(estimate.revenueCents)}</span><span>{next===null?'Faixa máxima':`${money(Math.max(0,next))} até a próxima faixa`}</span></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><Tier label="Até R$ 1.000" price="R$ 49,90" /><Tier label="R$ 1.000,01 a R$ 3.500" price="R$ 69,90" /><Tier label="Acima de R$ 3.500" price="R$ 129,90" /></div><p className="mt-4 rounded-2xl bg-background p-4 text-sm text-stone-600"><b>O que entra:</b> produtos vendidos menos descontos. Taxa de entrega, taxa de serviço do garçom e pedidos cancelados não entram na faixa.</p></section>
+
+    {data.invoices.some((invoice)=>invoice.status==='OPEN'||invoice.status==='OVERDUE') && <section className="rounded-[28px] border bg-white p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.15em] text-primary">Pagamento</p><h2 className="mt-2 text-xl font-black">Mensalidade pendente</h2><p className="mt-1 text-sm text-stone-500">Use os dados abaixo para pagamento e aguarde a confirmação do Menu Flow.</p></div><div className="rounded-2xl bg-background p-4 text-sm"><p><b>Favorecido:</b> {data.paymentSettings?.pixReceiverName || 'Não informado'}</p><p className="mt-1 break-all"><b>Chave PIX:</b> {data.paymentSettings?.pixKey || 'Não informada'}</p></div></div></section>}
+    <section><div className="mb-3"><h2 className="text-xl font-black">Histórico de mensalidades</h2><p className="text-sm text-stone-500">Valores já fechados não mudam quando as faixas futuras forem atualizadas.</p></div><div className="grid gap-3">{data.invoices.map((invoice)=><article key={invoice._id} className="grid gap-3 rounded-[24px] border bg-white p-5 shadow-sm sm:grid-cols-[1fr_.8fr_.8fr_auto] sm:items-center"><div><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${statusTone[invoice.status]}`}>{statusLabel[invoice.status]}</span><h3 className="mt-2 font-black capitalize">{labelPeriod(invoice.period)}</h3></div><Metric label="Faturamento considerado" value={money(invoice.revenueCents??0)} /><Metric label="Mensalidade" value={money(invoice.amountCents)} /><div className="text-right text-xs font-bold text-stone-500">{invoice.dueDate?`Venceu/vence em ${new Date(invoice.dueDate).toLocaleDateString('pt-BR')}`:'—'}</div></article>)}{!data.invoices.length&&<div className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-stone-500">Nenhuma mensalidade fechada ainda.</div>}</div></section>
+  </section>;
+}
+function Card({label,value}:{label:string;value:string}){return <div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-white/70">{label}</p><strong className="mt-1 block text-xl font-black">{value}</strong></div>}
+function Tier({label,price}:{label:string;price:string}){return <div className="rounded-2xl border bg-background/50 p-4"><p className="text-xs font-bold text-stone-500">{label}</p><strong className="mt-1 block text-lg font-black">{price}</strong></div>}
+function Metric({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-[.12em] text-stone-400">{label}</p><strong className="mt-1 block">{value}</strong></div>}

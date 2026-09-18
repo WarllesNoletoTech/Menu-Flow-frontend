@@ -1,13 +1,22 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useDashboard } from '../../../../components/dashboard/DashboardContext';
 
-type Tier = { minOrders: number; maxOrders: number | null; amountCents: number };
-type Plan = { _id: string; name: string; active: boolean; isDefault: boolean; dueDay?: number; tiers: Tier[] };
-type PlanForm = { name: string; active: boolean; isDefault: boolean; dueDay: string | number; tiers: Array<{ minOrders: number | string; maxOrders: number | string | null; amountCents: number | string }> };
+type Tier = { minRevenueCents: number; maxRevenueCents: number | null; amountCents: number; minOrders?: number; maxOrders?: number | null };
+type Plan = { _id: string; name: string; active: boolean; isDefault: boolean; tiers: Tier[] };
+type TierForm = { min: string; max: string; amount: string };
+type PlanForm = { name: string; active: boolean; isDefault: boolean; tiers: TierForm[] };
 
-const blank: PlanForm = { name: '', active: true, isDefault: false, dueDay: '', tiers: [{ minOrders: 0, maxOrders: null, amountCents: 0 }] };
+const money = (cents = 0) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const cents = (value: string) => Math.round((Number(value.replace(',', '.')) || 0) * 100);
+const reais = (value?: number | null) => value === null || value === undefined ? '' : (value / 100).toFixed(2).replace('.', ',');
+const defaultTiers: TierForm[] = [
+  { min: '0,00', max: '1000,00', amount: '49,90' },
+  { min: '1000,01', max: '3500,00', amount: '69,90' },
+  { min: '3500,01', max: '', amount: '129,90' },
+];
+const blank: PlanForm = { name: 'Menu Flow por faturamento', active: true, isDefault: true, tiers: defaultTiers };
 
 export default function Page() {
   const { request } = useDashboard();
@@ -18,77 +27,57 @@ export default function Page() {
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    try { setPlans(await request<Plan[]>('/billing/plans')); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível carregar os planos.'); }
+    try { setPlans(await request<Plan[]>('/billing/plans', { cache: 'no-store' })); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível carregar as faixas.'); }
   }
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const activePlan = useMemo(() => plans.find((plan) => plan.isDefault && plan.tiers?.some((tier) => tier.minRevenueCents !== undefined)), [plans]);
+
   async function save(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage('');
+    event.preventDefault(); setBusy(true); setMessage('');
     try {
-      await request(editing ? `/billing/plans/${editing}` : '/billing/plans', {
-        method: editing ? 'PATCH' : 'POST',
-        body: JSON.stringify({
-          ...form,
-          dueDay: form.dueDay ? +form.dueDay : undefined,
-          tiers: form.tiers.map((tier) => ({ ...tier, minOrders: +tier.minOrders, maxOrders: tier.maxOrders === null ? null : +tier.maxOrders, amountCents: +tier.amountCents })),
-        }),
-      });
-      setForm(blank);
-      setEditing('');
-      await load();
-      setMessage(editing ? 'Plano atualizado com sucesso.' : 'Plano criado com sucesso.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Não foi possível salvar o plano.');
-    } finally {
-      setBusy(false);
-    }
+      const payload = {
+        name: form.name.trim(), active: form.active, isDefault: form.isDefault,
+        tiers: form.tiers.map((tier) => ({
+          minRevenueCents: cents(tier.min),
+          maxRevenueCents: tier.max.trim() ? cents(tier.max) : null,
+          amountCents: cents(tier.amount),
+        })),
+      };
+      await request(editing ? `/billing/plans/${editing}` : '/billing/plans', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
+      setEditing(''); setForm(blank); await load();
+      setMessage('Faixas de cobrança salvas com sucesso. As cobranças antigas não são alteradas.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível salvar as faixas.'); }
+    finally { setBusy(false); }
   }
 
-  return (
-    <section className="mx-auto max-w-6xl space-y-6">
-      <header className="mf-panel rounded-[32px] px-5 py-6 sm:px-6 lg:px-8">
-        <div className="max-w-3xl">
-          <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-primary">Configuração financeira</span>
-          <h1 className="mt-3 text-3xl font-black tracking-tight text-stone-900 sm:text-[2.35rem]">Planos de cobrança</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-500 sm:text-base">Configure faixas de cobrança por quantidade de pedidos, vencimento e plano padrão. Os valores são informados em centavos.</p>
-        </div>
-      </header>
+  function edit(plan: Plan) {
+    if (!plan.tiers?.some((tier) => tier.minRevenueCents !== undefined)) { setMessage('Este é um plano legado por quantidade de pedidos. Ele não é usado nas novas cobranças.'); return; }
+    setEditing(plan._id);
+    setForm({
+      name: plan.name, active: plan.active, isDefault: plan.isDefault,
+      tiers: plan.tiers.map((tier) => ({ min: reais(tier.minRevenueCents), max: reais(tier.maxRevenueCents), amount: reais(tier.amountCents) })),
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
-      <form onSubmit={save} className="rounded-[30px] border border-border/90 bg-white p-5 shadow-[0_14px_36px_rgba(41,37,36,.05)] sm:p-6">
-        <div className="border-b border-border pb-5"><span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-accent">{editing ? 'Edição de plano' : 'Novo plano'}</span><h2 className="mt-3 text-xl font-black tracking-tight text-stone-900">{editing ? 'Editar plano de cobrança' : 'Criar plano de cobrança'}</h2></div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <label className="font-bold text-stone-800">Nome<input required className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-          <label className="font-bold text-stone-800">Dia de vencimento<input min="1" max="28" type="number" className="field" value={form.dueDay} onChange={(event) => setForm({ ...form, dueDay: event.target.value })} /></label>
-          <label className="mt-7 flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-background/55 px-4 font-bold text-stone-700"><input type="checkbox" className="h-5 w-5 accent-primary" checked={form.isDefault} onChange={(event) => setForm({ ...form, isDefault: event.target.checked })} /> Plano padrão</label>
-        </div>
+  return <section className="mx-auto max-w-6xl space-y-6">
+    <header className="overflow-hidden rounded-[32px] bg-gradient-to-r from-ink via-[#6f1c21] to-[#8f242a] px-5 py-6 text-white shadow-xl sm:px-7">
+      <p className="text-[10px] font-black uppercase tracking-[.22em] text-lime">Cobrança Menu Flow</p>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-3xl font-black tracking-tight">Faixas por faturamento</h1><p className="mt-2 max-w-2xl text-sm text-white/75">A mensalidade é definida pelo faturamento elegível do mês anterior. Não há cobrança por pedido.</p></div><span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-black">Vencimento: 1ª terça-feira</span></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">{(activePlan?.tiers ?? []).map((tier, index) => <div key={index} className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-white/70">{tier.maxRevenueCents === null ? `Acima de ${money(tier.minRevenueCents - 1)}` : index === 0 ? `Até ${money(tier.maxRevenueCents)}` : `${money(tier.minRevenueCents)} a ${money(tier.maxRevenueCents)}`}</p><strong className="mt-1 block text-2xl font-black">{money(tier.amountCents)}</strong></div>)}</div>
+    </header>
 
-        <div className="mt-6 rounded-[26px] border border-border bg-background/45 p-4 sm:p-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-lg font-black tracking-tight text-stone-900">Faixas de cobrança</h3><p className="text-sm text-stone-500">Defina intervalos contínuos de pedidos e seus respectivos valores.</p></div><button type="button" className="min-h-10 rounded-2xl border border-border bg-white px-4 text-xs font-black text-stone-700" onClick={() => setForm({ ...form, tiers: [...form.tiers, { minOrders: 0, maxOrders: null, amountCents: 0 }] })}>+ Adicionar faixa</button></div>
-          <div className="mt-4 grid gap-3">
-            {form.tiers.map((tier, index) => (
-              <div className="grid gap-3 rounded-[22px] border border-border bg-white p-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end" key={index}>
-                <label className="text-sm font-bold text-stone-700">Mínimo de pedidos<input className="field" aria-label="Mínimo" type="number" min="0" value={tier.minOrders} onChange={(event) => setForm({ ...form, tiers: form.tiers.map((item, itemIndex) => itemIndex === index ? { ...item, minOrders: event.target.value } : item) })} /></label>
-                <label className="text-sm font-bold text-stone-700">Máximo de pedidos<input className="field" aria-label="Máximo; vazio para ilimitado" type="number" min="0" value={tier.maxOrders ?? ''} onChange={(event) => setForm({ ...form, tiers: form.tiers.map((item, itemIndex) => itemIndex === index ? { ...item, maxOrders: event.target.value === '' ? null : event.target.value } : item) })} /></label>
-                <label className="text-sm font-bold text-stone-700">Valor em centavos<input className="field" aria-label="Valor em centavos" type="number" min="0" value={tier.amountCents} onChange={(event) => setForm({ ...form, tiers: form.tiers.map((item, itemIndex) => itemIndex === index ? { ...item, amountCents: event.target.value } : item) })} /></label>
-                <button type="button" className="min-h-11 rounded-2xl border border-danger/15 bg-danger/10 px-4 text-xs font-black text-danger" onClick={() => setForm({ ...form, tiers: form.tiers.filter((_, itemIndex) => itemIndex !== index) })}>Remover</button>
-              </div>
-            ))}
-          </div>
-        </div>
+    <form onSubmit={save} className="rounded-[30px] border border-border bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-primary">Configuração</p><h2 className="mt-1 text-xl font-black">{editing ? 'Editar cobrança' : 'Modelo de cobrança'}</h2></div>{editing && <button type="button" onClick={() => { setEditing(''); setForm(blank); }} className="rounded-xl border px-4 py-2 text-xs font-black">Cancelar edição</button>}</div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_auto]"><label className="font-bold">Nome<input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label><label className="mt-7 flex min-h-12 items-center gap-2 rounded-2xl border px-4 font-bold"><input type="checkbox" checked={form.isDefault} onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} /> Modelo padrão</label></div>
+      <div className="mt-5 space-y-3">{form.tiers.map((tier, index) => <div key={index} className="grid gap-3 rounded-2xl border bg-background/40 p-4 sm:grid-cols-3"><label className="text-sm font-bold">Faturamento mínimo (R$)<input className="field" inputMode="decimal" value={tier.min} onChange={(e) => setForm({ ...form, tiers: form.tiers.map((item, i) => i === index ? { ...item, min: e.target.value } : item) })} /></label><label className="text-sm font-bold">Faturamento máximo (R$)<input className="field" inputMode="decimal" placeholder="Sem limite" value={tier.max} onChange={(e) => setForm({ ...form, tiers: form.tiers.map((item, i) => i === index ? { ...item, max: e.target.value } : item) })} /></label><label className="text-sm font-bold">Mensalidade (R$)<input className="field" inputMode="decimal" value={tier.amount} onChange={(e) => setForm({ ...form, tiers: form.tiers.map((item, i) => i === index ? { ...item, amount: e.target.value } : item) })} /></label></div>)}</div>
+      <p className="mt-4 rounded-2xl bg-background p-4 text-sm text-stone-600"><b>Base de cobrança:</b> produtos vendidos − descontos. Taxa de entrega, taxa de serviço do garçom e pedidos cancelados não entram no cálculo.</p>
+      {message && <p className="mt-4 rounded-2xl border bg-white p-3 text-sm font-bold">{message}</p>}
+      <div className="mt-5 flex justify-end"><button disabled={busy} className="rounded-2xl bg-ink px-6 py-3 text-sm font-black text-white disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar faixas'}</button></div>
+    </form>
 
-        {message && <p className="mt-5 rounded-[20px] border border-border bg-background/55 p-3 text-sm font-semibold text-stone-700">{message}</p>}
-        <div className="mt-6 flex justify-end border-t border-border pt-5"><button disabled={busy} className="min-h-11 rounded-2xl bg-ink px-6 py-3 text-sm font-black text-white shadow-sm disabled:opacity-50">{busy ? 'Salvando…' : editing ? 'Salvar plano' : 'Criar plano'}</button></div>
-      </form>
-
-      <div>
-        <div className="mb-4 flex items-end justify-between gap-3"><div><span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-primary">Planos cadastrados</span><h2 className="mt-3 text-2xl font-black tracking-tight text-stone-900">Estrutura atual</h2></div><span className="text-sm font-semibold text-stone-500">{plans.length} {plans.length === 1 ? 'plano' : 'planos'}</span></div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {plans.map((plan) => <article className="rounded-[28px] border border-border/90 bg-white p-5 shadow-[0_12px_32px_rgba(41,37,36,.05)]" key={plan._id}><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] ${plan.active ? 'bg-success/10 text-success' : 'bg-stone-100 text-stone-600'}`}>{plan.active ? 'Ativo' : 'Arquivado'}</span>{plan.isDefault && <span className="rounded-full bg-gold/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-amber-700">Padrão</span>}</div><strong className="mt-3 block text-xl font-black tracking-tight text-stone-900">{plan.name}</strong>{plan.dueDay && <p className="mt-1 text-sm text-stone-500">Vencimento: dia {plan.dueDay}</p>}</div><button className="min-h-10 rounded-2xl border border-border bg-white px-4 text-xs font-black text-stone-700" onClick={() => { setEditing(plan._id); setForm({ ...plan, dueDay: plan.dueDay || '' }); }}>Editar</button></div><div className="mt-4 rounded-[20px] border border-border bg-background/50 p-4"><p className="text-[10px] font-black uppercase tracking-[.13em] text-stone-400">Faixas configuradas</p><p className="mt-2 text-sm leading-6 text-stone-700">{plan.tiers.map((tier) => `${tier.minOrders}–${tier.maxOrders ?? 'sem limite'} pedidos: ${(tier.amountCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`).join(' • ')}</p></div></article>)}
-        </div>
-      </div>
-    </section>
-  );
+    <section><div className="mb-3 flex items-center justify-between"><h2 className="text-xl font-black">Histórico de modelos</h2><span className="text-sm text-stone-500">{plans.length} cadastrado(s)</span></div><div className="grid gap-3 md:grid-cols-2">{plans.map((plan) => { const revenue = plan.tiers?.some((tier) => tier.minRevenueCents !== undefined); return <article key={plan._id} className={`rounded-[26px] border bg-white p-5 shadow-sm ${!revenue ? 'opacity-60' : ''}`}><div className="flex items-start justify-between gap-3"><div><div className="flex gap-2">{plan.isDefault && <span className="rounded-full bg-gold/20 px-2 py-1 text-[10px] font-black">PADRÃO</span>}{!revenue && <span className="rounded-full bg-stone-100 px-2 py-1 text-[10px] font-black">LEGADO</span>}</div><h3 className="mt-2 font-black">{plan.name}</h3></div><button type="button" onClick={() => edit(plan)} className="rounded-xl border px-3 py-2 text-xs font-black">Editar</button></div><div className="mt-3 text-sm text-stone-600">{revenue ? plan.tiers.map((tier) => `${tier.maxRevenueCents === null ? 'Acima de ' + money(tier.minRevenueCents - 1) : money(tier.minRevenueCents) + '–' + money(tier.maxRevenueCents)}: ${money(tier.amountCents)}`).join(' • ') : 'Plano antigo por quantidade de pedidos. Mantido somente para histórico.'}</div></article>; })}</div></section>
+  </section>;
 }
