@@ -430,7 +430,6 @@ function SmartCatalogBuilder({ onGoProducts }: { onGoProducts: () => void }) {
 export function CategoriesManager() {
   const { request, base, categories: items, products, loading, loadError, refresh, invalidateLoads, setCategories: setItems } = useCatalog();
   const [name, setName] = useState('');
-  const [productionSector, setProductionSector] = useState<'KITCHEN'|'BAR'|'NONE'>('KITCHEN');
   const [notice, setNotice] = useState<NoticeState>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   async function add(event: FormEvent) {
@@ -450,14 +449,13 @@ export function CategoriesManager() {
     try {
       const created = await request<Category>(`${base}/categories`, {
         method: 'POST',
-        body: JSON.stringify({ name: cleanName, order: items.length, productionSector }),
+        body: JSON.stringify({ name: cleanName, order: items.length }),
       });
       assertEntity(created, 'categoria');
       invalidateLoads();
       setItems((current) => sortByOrder([...current.filter((item) => item._id !== created._id), created]));
       await refresh();
       setName('');
-      setProductionSector('KITCHEN');
       setNotice({ text: 'Categoria criada com sucesso.', kind: 'success' });
     } catch (error) {
       setNotice({ text: msg(error), kind: 'error' });
@@ -533,25 +531,15 @@ export function CategoriesManager() {
 
   return (
     <div className="mt-6">
-      <form onSubmit={add} className="grid gap-3 rounded-2xl border bg-surface p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_190px_auto]">
+      <form onSubmit={add} className="flex flex-col gap-3 rounded-2xl border bg-surface p-4 shadow-sm sm:flex-row">
         <input
           required
           maxLength={80}
           className="field !mt-0"
           placeholder="Ex.: Pizzas, Hambúrgueres, Bebidas"
           value={name}
-          onChange={(event) => {
-            const next = event.target.value;
-            setName(next);
-            const normalized = next.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            if (/(bebida|refriger|suco|cerveja|drink|vinho|agua|cafe|cha|vitamina|energetico)/.test(normalized)) setProductionSector('BAR');
-          }}
+          onChange={(event) => setName(event.target.value)}
         />
-        <select aria-label="Setor de produção" className="field !mt-0" value={productionSector} onChange={(event)=>setProductionSector(event.target.value as 'KITCHEN'|'BAR'|'NONE')}>
-          <option value="KITCHEN">Cozinha</option>
-          <option value="BAR">Bar / bebidas</option>
-          <option value="NONE">Sem impressão</option>
-        </select>
         <button
           type="submit"
           disabled={busyId !== null || !name.trim()}
@@ -625,18 +613,20 @@ function CategoryRow({
           onChange={(event) => setDraftName(event.target.value)}
         />
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label={`Setor de produção de ${item.name}`}
-          className="rounded-xl border bg-white px-3 py-2 text-sm font-bold"
-          value={item.productionSector ?? inferredProductionSector(item.name)}
-          disabled={busy}
-          onChange={(event)=>void onUpdate(item,{productionSector:event.target.value as Category['productionSector']})}
-        >
-          <option value="KITCHEN">Cozinha</option>
-          <option value="BAR">Bar</option>
-          <option value="NONE">Sem impressão</option>
-        </select>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-bold text-stone-500">Destino da impressão
+          <select
+            aria-label={`Destino da impressão de ${item.name}`}
+            className="mt-1 block rounded-xl border bg-white px-3 py-2 text-sm font-bold text-ink"
+            value={item.productionSector ?? 'KITCHEN'}
+            disabled={busy}
+            onChange={(event)=>void onUpdate(item,{productionSector:event.target.value as Category['productionSector']})}
+          >
+            <option value="KITCHEN">Cozinha</option>
+            <option value="BAR">Bar</option>
+            <option value="NONE">Não imprimir</option>
+          </select>
+        </label>
         <button
           type="button"
           disabled={busy || !changed}
@@ -1275,9 +1265,4 @@ function validateAddonGroups(groups: Group[]) {
     }
   }
   return null;
-}
-
-function inferredProductionSector(name: string): 'KITCHEN'|'BAR' {
-  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /(bebida|refriger|suco|cerveja|drink|vinho|agua|cafe|cha|vitamina|energetico|destilado)/.test(normalized) ? 'BAR' : 'KITCHEN';
 }
