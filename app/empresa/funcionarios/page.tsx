@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useEmpresa } from '../../../components/empresa/EmpresaContext';
 import type { Employee } from '../../../components/empresa/types';
 
-type Position = 'WAITER'|'KITCHEN'|'CASHIER'|'MANAGER'|'OTHER';
+type Position = 'WAITER'|'KITCHEN'|'BAR'|'CASHIER'|'MANAGER'|'OTHER';
 type Form = { name: string; email: string; phone: string; password: string; confirmPassword: string; active: boolean; employeePosition: Position; permissions: string[] };
 const TABLE_PERMISSIONS = [
   ['TABLES_VIEW','Visualizar mesas'],
@@ -23,11 +23,12 @@ const TABLE_PERMISSIONS = [
 const PRESETS: Record<Position,string[]> = {
   WAITER: ['TABLES_VIEW','TABLES_OPEN','TABLES_ORDER','TABLES_DELIVER','TABLES_TRANSFER','TABLES_REQUEST_BILL'],
   KITCHEN: ['TABLES_VIEW','TABLES_KITCHEN','TABLES_PRINT'],
+  BAR: ['TABLES_VIEW','TABLES_KITCHEN','TABLES_PRINT'],
   CASHIER: ['TABLES_VIEW','TABLES_PAYMENT','TABLES_PRINT','TABLES_DISCOUNT','TABLES_CLOSE'],
   MANAGER: TABLE_PERMISSIONS.map(([value])=>value),
   OTHER: [],
 };
-const POSITION_LABEL: Record<Position,string> = { WAITER:'Garçom', KITCHEN:'Cozinha', CASHIER:'Caixa', MANAGER:'Gerente', OTHER:'Outro' };
+const POSITION_LABEL: Record<Position,string> = { WAITER:'Garçom', KITCHEN:'Cozinha', BAR:'Bar', CASHIER:'Caixa', MANAGER:'Gerente', OTHER:'Outro' };
 const blank: Form = { name: '', email: '', phone: '', password: '', confirmPassword: '', active: true, employeePosition: 'OTHER', permissions: [] };
 
 export default function Page() {
@@ -62,7 +63,7 @@ export default function Page() {
   }
 
   return <section className="mx-auto max-w-6xl"><h2 className="text-2xl font-black">Funcionários</h2><p className="mt-1 text-stone-500">Cadastre a equipe e defina exatamente o que cada funcionário pode fazer.</p>
-    {settings?.tableServiceEnabled&&<div className="mt-5 rounded-2xl border bg-lime/10 p-4"><strong>Controle de mesas ativo.</strong><p className="mt-1 text-sm text-stone-600">Use a função Garçom, Caixa ou Gerente para preencher permissões rapidamente. Você pode ajustar cada permissão manualmente.</p></div>}
+    {settings?.tableServiceEnabled&&<div className="mt-5 rounded-2xl border bg-lime/10 p-4"><strong>Controle de mesas ativo.</strong><p className="mt-1 text-sm text-stone-600">Use a função Garçom, Cozinha, Bar, Caixa ou Gerente para preencher permissões rapidamente. Você pode ajustar cada permissão manualmente.</p></div>}
     <form onSubmit={save} className="mt-6 rounded-2xl bg-surface p-5 shadow-sm"><h3 className="font-black">{editing ? 'Editar funcionário' : 'ADICIONAR FUNCIONÁRIO'}</h3><div className="mt-3 grid gap-3 sm:grid-cols-2">{([['name', 'Nome', 'text'], ['email', 'E-mail', 'email'], ['phone', 'Telefone', 'tel'], ['password', editing ? 'Nova senha (opcional)' : 'Senha', 'password'], ['confirmPassword', editing ? 'Confirmar nova senha' : 'Confirmar senha', 'password']] as const).map(([key, label, type]) => <label key={key} className="font-bold">{label}<input required={key !== 'phone' && (!editing || (key !== 'password' && key !== 'confirmPassword'))} minLength={key === 'password' || key === 'confirmPassword' ? 8 : undefined} type={type} className="field" value={form[key]} onChange={(event) => setForm({ ...form, [key]: event.target.value })}/></label>)}<label className="font-bold">Função<select className="field" value={form.employeePosition} onChange={(event)=>choosePosition(event.target.value as Position)}>{Object.entries(POSITION_LABEL).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{editing && <label className="font-bold">Status<select className="field" value={String(form.active)} onChange={(event) => setForm({ ...form, active: event.target.value === 'true' })}><option value="true">Ativo</option><option value="false">Bloqueado</option></select></label>}</div>
       {settings?.tableServiceEnabled&&<fieldset className="mt-5 rounded-2xl border p-4"><legend className="px-2 font-black">Permissões do salão</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{TABLE_PERMISSIONS.map(([value,label])=><label key={value} className="flex items-center gap-3 rounded-xl bg-background p-3 text-sm font-bold"><input type="checkbox" checked={form.permissions.includes(value)} onChange={()=>togglePermission(value)}/>{label}</label>)}</div></fieldset>}
       <div className="mt-4 flex gap-2"><button className="rounded-xl bg-ink px-5 py-3 font-bold text-white">Salvar</button>{editing && <button type="button" onClick={() => { setEditing(undefined); setForm(blank); }} className="rounded-xl border px-5 font-bold">Cancelar</button>}</div></form>

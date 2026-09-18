@@ -15,7 +15,7 @@ export function PwaInstallPrompt() {
     if (canInstall) setHidden(false);
   }, [canInstall, mode]);
 
-  if (!canInstall || installed || standalone || hidden || (mode === 'garcom' && !user?.permissions?.includes('TABLES_VIEW') && !['KITCHEN','CASHIER'].includes(user?.employeePosition??'')) || pathname.endsWith('/empresa/instalar-app') || pathname.endsWith('/funcionario/instalar-app')) return null;
+  if (!canInstall || installed || standalone || hidden || (mode === 'garcom' && !user?.permissions?.includes('TABLES_VIEW') && !['KITCHEN','BAR','CASHIER'].includes(user?.employeePosition??'')) || pathname.endsWith('/empresa/instalar-app') || pathname.endsWith('/funcionario/instalar-app')) return null;
 
   const merchant = mode === 'lojista';
   const waiter = mode === 'garcom';
