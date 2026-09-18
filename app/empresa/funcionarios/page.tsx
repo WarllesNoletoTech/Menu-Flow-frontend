@@ -10,18 +10,20 @@ const TABLE_PERMISSIONS = [
   ['TABLES_VIEW','Visualizar mesas'],
   ['TABLES_OPEN','Abrir mesa'],
   ['TABLES_ORDER','Adicionar pedidos'],
+  ['TABLES_KITCHEN','Operar cozinha / marcar pronto'],
   ['TABLES_DELIVER','Entregar pedido na mesa'],
   ['TABLES_CANCEL','Cancelar pedido de mesa'],
   ['TABLES_TRANSFER','Transferir/juntar mesas e trocar garçom'],
   ['TABLES_REQUEST_BILL','Solicitar conta'],
   ['TABLES_PAYMENT','Registrar pagamentos'],
+  ['TABLES_PRINT','Imprimir pedidos e contas'],
   ['TABLES_DISCOUNT','Aplicar desconto'],
   ['TABLES_CLOSE','Fechar mesa'],
 ] as const;
 const PRESETS: Record<Position,string[]> = {
   WAITER: ['TABLES_VIEW','TABLES_OPEN','TABLES_ORDER','TABLES_DELIVER','TABLES_TRANSFER','TABLES_REQUEST_BILL'],
-  KITCHEN: [],
-  CASHIER: ['TABLES_VIEW','TABLES_PAYMENT','TABLES_DISCOUNT','TABLES_CLOSE'],
+  KITCHEN: ['TABLES_VIEW','TABLES_KITCHEN','TABLES_PRINT'],
+  CASHIER: ['TABLES_VIEW','TABLES_PAYMENT','TABLES_PRINT','TABLES_DISCOUNT','TABLES_CLOSE'],
   MANAGER: TABLE_PERMISSIONS.map(([value])=>value),
   OTHER: [],
 };

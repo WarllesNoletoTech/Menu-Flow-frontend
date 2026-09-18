@@ -10,7 +10,7 @@ const positionLabel: Record<string, string> = { WAITER: 'Garçom', KITCHEN: 'Coz
 export default function Page() {
   const { user } = useAuth();
   const router = useRouter();
-  const salon = Boolean(user?.permissions?.includes('TABLES_VIEW'));
+  const salon = Boolean(user?.permissions?.includes('TABLES_VIEW') || ['KITCHEN','CASHIER'].includes(user?.employeePosition??''));
 
   useEffect(() => {
     if (salon) router.replace('/funcionario/mesas');
