@@ -36,9 +36,11 @@ export default function Layout({ children }: Readonly<{ children: React.ReactNod
     <html lang="pt-BR">
       <body>
         <PwaInstallProvider>
-          <AuthProvider>{children}</AuthProvider>
-          <PwaRegister />
-          <PwaInstallPrompt />
+          <AuthProvider>
+            {children}
+            <PwaRegister />
+            <PwaInstallPrompt />
+          </AuthProvider>
         </PwaInstallProvider>
       </body>
     </html>
