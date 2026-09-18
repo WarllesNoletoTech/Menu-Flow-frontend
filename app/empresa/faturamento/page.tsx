@@ -321,7 +321,7 @@ export default function Page() {
 
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <DetailTable title="Por forma de pagamento" headers={["Forma", "Pedidos", "Faturamento"]} rows={details.paymentMethods.map((item) => [paymentMethodLabel(item.method), String(item.orders), money(item.salesCents)])} />
-              <DetailTable title="Entrega e retirada" headers={["Tipo", "Pedidos", "Faturamento"]} rows={details.fulfillments.map((item) => [item.fulfillment === "DELIVERY" ? "Entrega" : "Retirada", String(item.orders), money(item.salesCents)])} />
+              <DetailTable title="Formas de atendimento" headers={["Tipo", "Pedidos", "Faturamento"]} rows={details.fulfillments.map((item) => [item.fulfillment === "DELIVERY" ? "Entrega" : item.fulfillment === "TABLE" ? "Mesa / salão" : "Retirada", String(item.orders), money(item.salesCents)])} />
             </div>
 
             <div className="mt-4">

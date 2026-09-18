@@ -1,9 +1,10 @@
-const CACHE_NAME = 'menu-flow-pwa-v6';
+const CACHE_NAME = 'menu-flow-pwa-v7';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,
   '/manifest.webmanifest',
   '/manifest-lojista.webmanifest',
+  '/manifest-garcom.webmanifest',
   '/assets/branding/menu-flow-icon-192.png',
   '/assets/branding/menu-flow-icon-512.png',
   '/assets/branding/menu-flow-symbol.png',
@@ -111,6 +112,7 @@ self.addEventListener('fetch', (event) => {
   if (
     url.pathname === '/manifest.webmanifest' ||
     url.pathname === '/manifest-lojista.webmanifest' ||
+    url.pathname === '/manifest-garcom.webmanifest' ||
     url.pathname.startsWith('/assets/branding/')
   ) {
     event.respondWith(

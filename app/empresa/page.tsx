@@ -83,7 +83,7 @@ export default function EmpresaPage() {
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-primary/10 text-xs font-black text-primary">#{(order.orderNumber || order._id.slice(-4)).toString().slice(-4)}</span>
               <div className="min-w-0">
                 <b className="block truncate text-sm text-stone-900">{order.customerName}</b>
-                <span className="mt-1 block text-xs font-medium text-stone-500">{order.fulfillment === 'DELIVERY' ? 'Entrega' : 'Retirada'} · {new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="mt-1 block text-xs font-medium text-stone-500">{order.fulfillment === 'DELIVERY' ? 'Entrega' : order.fulfillment === 'TABLE' ? 'Mesa / salão' : 'Retirada'} · {new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 sm:justify-end">

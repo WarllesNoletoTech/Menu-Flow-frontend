@@ -1,7 +1,7 @@
 'use client';
 
 export type Role = 'SUPER_ADMIN' | 'RESTAURANT_ADMIN' | 'EMPLOYEE' | 'CUSTOMER';
-export type User = { id: string; name: string; email?: string; phone?: string; reportWhatsapp?: string; role: Role; restaurantId?: string };
+export type User = { id: string; name: string; email?: string; phone?: string; reportWhatsapp?: string; role: Role; restaurantId?: string; employeePosition?: 'WAITER'|'KITCHEN'|'CASHIER'|'MANAGER'|'OTHER'; permissions?: string[] };
 export type AuthSession = { accessToken: string; user: User };
 export type AuthScope = 'STAFF' | 'CUSTOMER';
 

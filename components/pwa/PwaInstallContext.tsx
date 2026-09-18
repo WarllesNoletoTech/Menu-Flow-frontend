@@ -8,7 +8,7 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-export type InstallMode = 'lojista' | 'cliente';
+export type InstallMode = 'lojista' | 'garcom' | 'cliente';
 
 type PwaInstallContextValue = {
   canInstall: boolean;
@@ -23,12 +23,9 @@ const PwaInstallContext = createContext<PwaInstallContextValue | null>(null);
 const RUNTIME_MODE_KEY = 'menu-flow.pwa-runtime-mode';
 
 function routeMode(pathname: string): InstallMode {
-  return pathname === '/empresa'
-    || pathname.startsWith('/empresa/')
-    || pathname === '/app/empresa'
-    || pathname.startsWith('/app/empresa/')
-    ? 'lojista'
-    : 'cliente';
+  if (pathname === '/empresa' || pathname.startsWith('/empresa/') || pathname === '/app/empresa' || pathname.startsWith('/app/empresa/')) return 'lojista';
+  if (pathname === '/funcionario' || pathname.startsWith('/funcionario/')) return 'garcom';
+  return 'cliente';
 }
 
 function isStandaloneMode() {
@@ -40,13 +37,13 @@ function isStandaloneMode() {
 function detectRuntimeMode(standalone: boolean): InstallMode | null {
   if (!standalone || typeof window === 'undefined') return null;
   const marker = new URLSearchParams(window.location.search).get('pwa');
-  if (marker === 'lojista') {
-    try { sessionStorage.setItem(RUNTIME_MODE_KEY, 'lojista'); } catch { /* noop */ }
-    return 'lojista';
+  if (marker === 'lojista' || marker === 'garcom') {
+    try { sessionStorage.setItem(RUNTIME_MODE_KEY, marker); } catch { /* noop */ }
+    return marker;
   }
   try {
     const stored = sessionStorage.getItem(RUNTIME_MODE_KEY);
-    if (stored === 'lojista' || stored === 'cliente') return stored;
+    if (stored === 'lojista' || stored === 'garcom' || stored === 'cliente') return stored;
     sessionStorage.setItem(RUNTIME_MODE_KEY, 'cliente');
   } catch { /* noop */ }
   return 'cliente';

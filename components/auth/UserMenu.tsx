@@ -65,7 +65,7 @@ export function UserMenu({ returnTo = '/', audience = 'staff' }: { returnTo?: st
           </div>
 
           <div className="p-2.5">
-            {userMenuItems(user.role).map((item) => (
+            {userMenuItems(user.role).filter((item) => !(user.role === 'EMPLOYEE' && ['/funcionario/mesas', '/funcionario/instalar-app'].includes(item.href) && !user.permissions?.includes('TABLES_VIEW'))).map((item) => (
               <Link role="menuitem" key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-[16px] px-3 py-3 text-sm font-black text-stone-700 transition hover:bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink">
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-background text-stone-500" aria-hidden>{item.href.includes('conta') ? '◯' : '→'}</span>
                 <span>{item.label}</span>

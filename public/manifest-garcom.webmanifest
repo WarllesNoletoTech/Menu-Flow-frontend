@@ -1,0 +1,23 @@
+{
+  "id": "/pwa/menu-flow-garcom",
+  "name": "Menu Flow Garçom",
+  "short_name": "MF Garçom",
+  "description": "Aplicativo de salão do Menu Flow para mesas, comandas e atendimento do garçom.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/funcionario/mesas?pwa=garcom",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F8F5F0",
+  "theme_color": "#221C1A",
+  "categories": ["business", "food", "productivity"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/assets/branding/menu-flow-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/branding/menu-flow-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Mesas", "short_name": "Mesas", "url": "/funcionario/mesas", "icons": [{ "src": "/assets/branding/menu-flow-icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Pedidos", "short_name": "Pedidos", "url": "/funcionario/pedidos", "icons": [{ "src": "/assets/branding/menu-flow-icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

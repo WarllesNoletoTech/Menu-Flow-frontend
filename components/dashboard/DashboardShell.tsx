@@ -83,7 +83,7 @@ function DashboardSidebar({
     return () => document.removeEventListener('keydown', key);
   }, [close]);
 
-  const items = [...dashboardMenus[role], ...extraItems];
+  const items = [...dashboardMenus[role], ...extraItems].filter((item) => !(role === 'EMPLOYEE' && ['/funcionario/mesas','/funcionario/instalar-app'].includes(item.href) && !auth.user?.permissions?.includes('TABLES_VIEW')));
   const active = (href: string) =>
     href === '/' ? false : href === dashboardFor(role) ? pathname === href : pathname.startsWith(href);
 
@@ -211,7 +211,7 @@ function DashboardHeader({
   }, []);
 
   if (!user) return null;
-  const items = dashboardMenus[role];
+  const items = dashboardMenus[role].filter((item) => !(role === 'EMPLOYEE' && ['/funcionario/mesas','/funcionario/instalar-app'].includes(item.href) && !user.permissions?.includes('TABLES_VIEW')));
   const title = items
     .filter((item) => !item.external && (item.href === dashboardFor(role) ? pathname === item.href : pathname.startsWith(item.href)))
     .sort((a, b) => b.href.length - a.href.length)[0]?.label || panelNames[role];

@@ -12,7 +12,7 @@ type Payment = { _id: string; name: string; method: string; active: boolean };
 type Detail = {
   establishment: { _id: string; name: string; tradeName?: string; slug: string; city?: string; state?: string; address?: string; mapUrl?: string; pickupInstructions?: string; open?: boolean };
   owner?: { name: string; email: string } | null;
-  settings?: { minimumOrder?: number; preparationMinutes?: number; pickupEnabled?: boolean; deliveryEnabled?: boolean };
+  settings?: { minimumOrder?: number; preparationMinutes?: number; pickupEnabled?: boolean; deliveryEnabled?: boolean; tableServiceEnabled?: boolean; waiterAppEnabled?: boolean; serviceFeePercent?: number; qrOrderingEnabled?: boolean; qrRequireWaiterApproval?: boolean };
   deliveryZones: Zone[];
   paymentMethods: Payment[];
 };
@@ -24,6 +24,11 @@ type ConfigForm = {
   preparationMinutes: string;
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  tableServiceEnabled: boolean;
+  waiterAppEnabled: boolean;
+  serviceFeePercent: string;
+  qrOrderingEnabled: boolean;
+  qrRequireWaiterApproval: boolean;
   open: boolean;
 };
 
@@ -32,6 +37,11 @@ const initialConfig: ConfigForm = {
   preparationMinutes: '',
   pickupEnabled: true,
   deliveryEnabled: false,
+  tableServiceEnabled: false,
+  waiterAppEnabled: false,
+  serviceFeePercent: '10',
+  qrOrderingEnabled: false,
+  qrRequireWaiterApproval: true,
   open: true,
 };
 
@@ -55,6 +65,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       preparationMinutes: data.settings?.preparationMinutes === undefined ? '' : String(data.settings.preparationMinutes),
       pickupEnabled: data.settings?.pickupEnabled ?? true,
       deliveryEnabled: data.settings?.deliveryEnabled ?? false,
+      tableServiceEnabled: data.settings?.tableServiceEnabled ?? false,
+      waiterAppEnabled: data.settings?.waiterAppEnabled ?? false,
+      serviceFeePercent: String(data.settings?.serviceFeePercent ?? 10),
+      qrOrderingEnabled: data.settings?.qrOrderingEnabled ?? false,
+      qrRequireWaiterApproval: data.settings?.qrRequireWaiterApproval ?? true,
       open: data.establishment?.open ?? true,
     });
     const universal = data.deliveryZones?.find((item) => item.coverageType === 'ALL');
@@ -79,7 +94,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
 
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
-    if (busy || (!config.pickupEnabled && !config.deliveryEnabled)) return;
+    if (busy || (!config.pickupEnabled && !config.deliveryEnabled && !config.tableServiceEnabled)) return;
     setBusy(true);
     setMessage('');
     try {
@@ -91,6 +106,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
             preparationMinutes: config.preparationMinutes ? Number(config.preparationMinutes) : undefined,
             pickupEnabled: config.pickupEnabled,
             deliveryEnabled: config.deliveryEnabled,
+            tableServiceEnabled: config.tableServiceEnabled,
+            waiterAppEnabled: config.waiterAppEnabled,
+            serviceFeePercent: Number(config.serviceFeePercent),
+            qrOrderingEnabled: config.qrOrderingEnabled,
+            qrRequireWaiterApproval: config.qrRequireWaiterApproval,
           }),
         }),
         request(`/restaurants/${id}`, { method: 'PATCH', body: JSON.stringify({ open: config.open }) }),
@@ -243,11 +263,13 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
           <form onSubmit={saveSettings} className="space-y-5 rounded-[30px] border border-border/90 bg-white p-5 shadow-[0_14px_36px_rgba(41,37,36,.05)] sm:p-6">
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border bg-background/45 p-4"><span><strong className="block text-stone-900">Receber pedidos</strong><small className="text-stone-500">Pause temporariamente a loja sem alterar os horários cadastrados.</small></span><input type="checkbox" className="h-6 w-6 accent-ink" checked={config.open} onChange={(event) => setConfig({ ...config, open: event.target.checked })} /></label>
 
-            <div><h3 className="font-black text-stone-900">Formas de atendimento</h3><div className="mt-2 grid gap-3 sm:grid-cols-2"><label className="flex items-center gap-3 rounded-[18px] border border-border p-4 font-bold"><input type="checkbox" checked={config.pickupEnabled} onChange={(event) => setConfig({ ...config, pickupEnabled: event.target.checked })} /> Retirada no local</label><label className="flex items-center gap-3 rounded-[18px] border border-border p-4 font-bold"><input type="checkbox" checked={config.deliveryEnabled} onChange={(event) => setConfig({ ...config, deliveryEnabled: event.target.checked })} /> Entrega</label></div>{!config.pickupEnabled && !config.deliveryEnabled && <p className="mt-2 text-sm font-bold text-danger">Ative pelo menos uma forma para receber pedidos.</p>}</div>
+            <div><h3 className="font-black text-stone-900">Formas de atendimento</h3><div className="mt-2 grid gap-3 sm:grid-cols-2"><label className="flex items-center gap-3 rounded-[18px] border border-border p-4 font-bold"><input type="checkbox" checked={config.pickupEnabled} onChange={(event) => setConfig({ ...config, pickupEnabled: event.target.checked })} /> Retirada no local</label><label className="flex items-center gap-3 rounded-[18px] border border-border p-4 font-bold"><input type="checkbox" checked={config.deliveryEnabled} onChange={(event) => setConfig({ ...config, deliveryEnabled: event.target.checked })} /> Entrega</label></div>{!config.pickupEnabled && !config.deliveryEnabled && !config.tableServiceEnabled && <p className="mt-2 text-sm font-bold text-danger">Ative pelo menos uma forma de atendimento.</p>}</div>
 
             <div className="grid gap-4 sm:grid-cols-2"><label className="font-bold">Pedido mínimo (R$)<input min="0" step="0.01" type="number" className="field" value={config.minimumOrder} onChange={(event) => setConfig({ ...config, minimumOrder: event.target.value })} /></label><label className="font-bold">Tempo de preparo (minutos)<input min="0" type="number" className="field" value={config.preparationMinutes} onChange={(event) => setConfig({ ...config, preparationMinutes: event.target.value })} /></label></div>
 
-            <div className="flex flex-wrap gap-3"><button disabled={busy || (!config.pickupEnabled && !config.deliveryEnabled)} className="min-h-11 rounded-2xl bg-ink px-6 font-black text-white disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar configurações'}</button><button type="button" onClick={() => setTab('hours')} className="min-h-11 rounded-2xl border border-border bg-white px-5 font-black text-stone-700">Editar horários</button></div>
+            <section className="rounded-[22px] border border-border bg-background/45 p-4"><h3 className="font-black text-stone-900">Salão e app do garçom</h3><p className="mt-1 text-sm text-stone-500">Libere o controle de mesas por estabelecimento sem interferir em Entrega ou Retirada.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="flex items-center justify-between gap-3 rounded-[18px] border border-border bg-white p-4 font-bold"><span>Controle de mesas</span><input type="checkbox" checked={config.tableServiceEnabled} onChange={(event)=>setConfig({...config,tableServiceEnabled:event.target.checked,waiterAppEnabled:event.target.checked?config.waiterAppEnabled:false})}/></label><label className="flex items-center justify-between gap-3 rounded-[18px] border border-border bg-white p-4 font-bold"><span>App do garçom</span><input type="checkbox" disabled={!config.tableServiceEnabled} checked={config.waiterAppEnabled} onChange={(event)=>setConfig({...config,waiterAppEnabled:event.target.checked})}/></label></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="font-bold">Taxa de serviço (%)<input min="0" max="100" step="0.01" type="number" className="field" value={config.serviceFeePercent} onChange={(event)=>setConfig({...config,serviceFeePercent:event.target.value})}/></label><label className="flex items-center justify-between gap-3 rounded-[18px] border border-border bg-white p-4 font-bold"><span>Preparar QR por mesa</span><input type="checkbox" disabled={!config.tableServiceEnabled} checked={config.qrOrderingEnabled} onChange={(event)=>setConfig({...config,qrOrderingEnabled:event.target.checked})}/></label></div>{config.qrOrderingEnabled&&<label className="mt-3 flex items-center justify-between gap-3 rounded-[18px] border border-border bg-white p-4 font-bold"><span>Pedido do QR exige aprovação do garçom</span><input type="checkbox" checked={config.qrRequireWaiterApproval} onChange={(event)=>setConfig({...config,qrRequireWaiterApproval:event.target.checked})}/></label>}</section>
+
+            <div className="flex flex-wrap gap-3"><button disabled={busy || (!config.pickupEnabled && !config.deliveryEnabled && !config.tableServiceEnabled)} className="min-h-11 rounded-2xl bg-ink px-6 font-black text-white disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar configurações'}</button><button type="button" onClick={() => setTab('hours')} className="min-h-11 rounded-2xl border border-border bg-white px-5 font-black text-stone-700">Editar horários</button></div>
           </form>
 
           <section className="rounded-[30px] border border-border/90 bg-white p-5 shadow-[0_14px_36px_rgba(41,37,36,.05)] sm:p-6">
