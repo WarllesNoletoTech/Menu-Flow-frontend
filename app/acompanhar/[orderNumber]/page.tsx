@@ -288,10 +288,12 @@ export default function Page() {
             <span>Taxa de entrega</span>
             <b>{money(order.deliveryFeeCents)}</b>
           </p>
-          <p className="flex justify-between">
-            <span>Taxa de serviço Menu Flow</span>
-            <b>{money(order.customerServiceFeeCents)}</b>
-          </p>
+          {(order.customerServiceFeeCents ?? 0) > 0 && (
+            <p className="flex justify-between">
+              <span>Taxa de serviço Menu Flow</span>
+              <b>{money(order.customerServiceFeeCents)}</b>
+            </p>
+          )}
           {Boolean(order.discountCents) && (
             <p className="flex justify-between">
               <span>Desconto</span>

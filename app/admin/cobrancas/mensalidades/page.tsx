@@ -259,7 +259,7 @@ Cardápios mais simples, clientes mais felizes.`);
         <div className="max-w-3xl">
           <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-primary">Financeiro da plataforma</span>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-stone-900 sm:text-[2.35rem]">Cobranças e relatórios de serviço</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-500 sm:text-base">Gerencie os dados de pagamento, gere relatórios de cobrança e acompanhe o histórico de mensalidades e taxas de serviço do Menu Flow.</p>
+          <p className="mt-2 text-sm leading-6 text-stone-500 sm:text-base">Gerencie os dados de pagamento, gere cobranças de mensalidade e acompanhe o histórico do Menu Flow.</p>
         </div>
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <SummaryCard label="Relatórios emitidos" value={String(items.length)} />
@@ -341,15 +341,8 @@ Cardápios mais simples, clientes mais felizes.`);
           <div className="mt-5 rounded-[24px] border border-border bg-background/55 p-5">
             <h3 className="font-black">Prévia — {preview.restaurant.name}</h3>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <p>
-                Pedidos concluídos disponíveis: <b>{preview.orderCount}</b>
-              </p>
-              <p>
-                Taxas Menu Flow cobradas nos pedidos:{" "}
-                <b>{money(preview.serviceFeeTotalCents)}</b> <Help />
-              </p>
-              <p>
-                Já cobrados: <b>{preview.alreadyBilledCount}</b>
+              <p className="sm:col-span-2">
+                Cobrança por pedido: <b>Desativada</b>. Os novos relatórios da plataforma consideram somente a mensalidade.
               </p>
             </div>
             <label className="mt-4 flex gap-2 font-bold">
@@ -447,7 +440,7 @@ Cardápios mais simples, clientes mais felizes.`);
             </div>
 
             <div className="grid gap-3 border-t border-border bg-background/35 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 xl:grid-cols-4">
-              <MiniFinance label="Taxa de serviço Menu Flow" value={money(r.serviceFeeTotalCents)} help />
+              {r.serviceFeeTotalCents > 0 && <MiniFinance label="Taxa por pedido (histórico)" value={money(r.serviceFeeTotalCents)} />}
               <MiniFinance label="Mensalidade" value={money(r.monthlyFeeCents)} />
               <MiniFinance label="Total do relatório" value={money(r.totalCents)} strong />
               <MiniFinance label="Situação" value={labels[r.status] ?? r.status} />
