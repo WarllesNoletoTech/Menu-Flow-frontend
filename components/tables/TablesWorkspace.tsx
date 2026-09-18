@@ -225,7 +225,7 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
       const result = await authenticatedRequest<{queued?:boolean}>('/cash-register/print', { method: 'POST' });
       if (result.queued) { setMessage('Resumo do caixa enviado para a impressora.'); return; }
     }
-    browserPrint('Caixa', cashPrintLines(cash));
+    browserPrint('Caixa', cashPrintLines(cash), printerSettings?.printerPaperWidth ?? 80);
     setMessage('Impressão do caixa aberta no navegador.');
   }
   async function printCashMovement(movement: CashMovement) {
@@ -233,7 +233,7 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
       const result = await authenticatedRequest<{queued?:boolean}>(`/cash-register/movements/${movement._id}/print`, { method: 'POST' });
       if (result.queued) { setMessage('Comprovante enviado para a impressora.'); return; }
     }
-    browserPrint('Operação de caixa', cashMovementPrintLines(movement));
+    browserPrint('Operação de caixa', cashMovementPrintLines(movement), printerSettings?.printerPaperWidth ?? 80);
     setMessage('Comprovante aberto no navegador.');
   }
 
@@ -333,7 +333,7 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
       await run(() => authenticatedRequest(`/printer/jobs/order/${order._id}/${sector}`, { method: 'POST' }), `${sector === 'BAR' ? 'Bar' : 'Cozinha'} enviado para a impressora.`);
       return;
     }
-    browserPrint(`Pedido - ${sector === 'BAR' ? 'Bar' : 'Cozinha'}`, orderPrintLines(session, order, data?.tables ?? [], sector));
+    browserPrint(`Pedido - ${sector === 'BAR' ? 'Bar' : 'Cozinha'}`, orderPrintLines(session, order, data?.tables ?? [], sector), printerSettings?.printerPaperWidth ?? 80);
     setMessage('Menu Flow Printer offline: aberta a impressão do navegador.');
   }
   async function printBill(session: Session) {
@@ -341,7 +341,7 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
       await run(() => authenticatedRequest(`/printer/jobs/bill/${session._id}`, { method: 'POST' }), 'Pré-conta enviada para a impressora do caixa.');
       return;
     }
-    browserPrint('Pré-conta', billPrintLines(session, data?.tables ?? []));
+    browserPrint('Pré-conta', billPrintLines(session, data?.tables ?? []), printerSettings?.printerPaperWidth ?? 80);
     setMessage('Menu Flow Printer offline: aberta a impressão do navegador.');
   }
 
@@ -546,7 +546,7 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
 function WorkspaceTab({active,onClick,label,badge,icon}:{active:boolean;onClick:()=>void;label:string;badge:string;icon:string}) { return <button type="button" onClick={onClick} className={`shrink-0 rounded-2xl px-4 py-2.5 text-sm font-black transition ${active?'bg-white text-ink shadow':'bg-white/10 text-white hover:bg-white/15'}`}><span className="mr-2">{icon}</span>{label}<span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${active?'bg-ink/10':'bg-white/10'}`}>{badge}</span></button>; }
 function InlineNotice({message,onClose,compact=false}:{message:string;onClose:()=>void;compact?:boolean}) { return <div className={`mb-3 flex items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 ${compact?'':'shadow-sm'}`}><span>{message}</span><button type="button" onClick={onClose} className="text-amber-700">×</button></div>; }
 function sessionTableName(session: Session, tables: TableItem[]) { const ids=(session.tableIds??[]).map((table)=>typeof table==='string'?table:table._id); const names=ids.map((id)=>tables.find((table)=>table._id===id)?.name).filter(Boolean); return names.length?names.join(' + '):'Mesa'; }
-function browserPrint(title:string, lines:string[]) { const popup=window.open('','_blank','width=440,height=720'); if(!popup) return; const escaped=lines.map((line)=>escapeHtml(line)).join('\n'); popup.document.write(`<html><head><title>${escapeHtml(title)}</title><style>@page{margin:4mm}body{font-family:monospace;font-size:12px;margin:0;white-space:pre-wrap}pre{white-space:pre-wrap}</style></head><body><pre>${escaped}</pre><script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}<\/script></body></html>`); popup.document.close(); }
+function browserPrint(title:string, lines:string[], paper:58|80=80) { const popup=window.open('','_blank','width=440,height=720'); if(!popup) return; const escaped=lines.map((line)=>escapeHtml(line)).join('\n'); const body=paper===58?54:76; const font=paper===58?10:11; popup.document.write(`<html><head><title>${escapeHtml(title)}</title><style>@page{size:${paper}mm auto;margin:0}html,body{margin:0;padding:0;background:white}body{width:${paper}mm;box-sizing:border-box;padding:2mm;font-family:Consolas,"Courier New",monospace;font-size:${font}px;line-height:1.25}pre{width:${body}mm;margin:0;white-space:pre-wrap;overflow-wrap:normal;word-break:normal}</style></head><body><pre>${escaped}</pre><script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}<\/script></body></html>`); popup.document.close(); }
 function orderPrintLines(session:Session,order:Order,tables:TableItem[],sector:'KITCHEN'|'BAR'='KITCHEN') { const lines=[`PEDIDO - ${sector==='BAR'?'BAR':'COZINHA'}`,sessionTableName(session,tables),order.orderNumber??'', '------------------------------']; for(const item of order.items.filter((entry)=>(entry.productionSector??'KITCHEN')===sector)){lines.push(`${item.quantity}x ${item.productName}`); if(item.addons?.length) lines.push(` + ${item.addons.map((a)=>a.name).join(', ')}`); if(item.observation) lines.push(` OBS: ${item.observation}`);} lines.push('------------------------------','MENU FLOW'); return lines; }
 function billPrintLines(session:Session,tables:TableItem[]) { const lines=['PRE-CONTA',sessionTableName(session,tables),'------------------------------']; for(const order of session.orders.filter((item)=>!['REJECTED','CANCELLED'].includes(item.status))) for(const item of order.items) lines.push(`${item.quantity}x ${item.productName}`); lines.push('------------------------------',`Subtotal: ${money(session.subtotalCents)}`,`Servico ${session.serviceFeePercent}%: ${money(session.serviceFeeCents)}`,`Desconto: -${money(session.discountCents)}`,`TOTAL: ${money(session.totalCents)}`,`Saldo: ${money(session.balanceCents)}`,'------------------------------','Esta nao e uma nota fiscal.','MENU FLOW'); return lines; }
 function escapeHtml(value:string) { return String(value).replace(/[&<>"']/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]||char)); }
