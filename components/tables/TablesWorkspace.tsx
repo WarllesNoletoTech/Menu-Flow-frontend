@@ -23,6 +23,11 @@ type Context = { settings: { tableServiceEnabled: boolean; waiterAppEnabled: boo
 type Workspace = 'TABLES'|'KITCHEN'|'CASHIER';
 type PrinterSettings = { printerEnabled: boolean; printerAutoKitchen: boolean; printerAutoBill: boolean; printerPaperWidth: 58|80; printerTokenLast4?: string|null; printerLastSeenAt?: string|null; printerDeviceName?: string|null; connected: boolean };
 type CartItem = { key: string; product: Product; quantity: number; observation: string; addons: Array<{ groupId: string; addonId: string; label: string }> };
+type CashShift = { _id: string; status: 'OPEN'|'CLOSED'; openingAmountCents: number; openedAt: string; openedBy?: string | { name?: string }; closedAt?: string; closedBy?: string | { name?: string }; declaredCashCents?: number; expectedCashCents?: number; differenceCents?: number; note?: string };
+type CashSummary = { openingAmountCents: number; supplyCents: number; withdrawalCents: number; salesCents: number; cashSalesCents: number; pixSalesCents: number; creditSalesCents: number; debitSalesCents: number; expectedCashCents: number; declaredCashCents?: number; differenceCents?: number };
+type CashMovement = { _id: string; type: 'OPENING'|'SUPPLY'|'WITHDRAWAL'|'SALE'; amountCents: number; method?: string; recordedAt: string; recordedBy?: string | { name?: string }; note?: string; sourceType?: string; sourceId?: string };
+type CashContext = { shift: CashShift | null; summary: CashSummary; movements: CashMovement[]; lastClosed?: { shift: CashShift; summary: CashSummary } | null };
+type CashAction = 'OPEN'|'SUPPLY'|'WITHDRAWAL'|'CLOSE'|'HISTORY';
 
 const money = (cents = 0) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const statusLabel: Record<string, string> = { PENDING: 'Para aceitar', ACCEPTED: 'Aceito', PREPARING: 'Em preparo', READY: 'Pronto', DELIVERED_TO_TABLE: 'Entregue na mesa', COMPLETED: 'Concluído', REJECTED: 'Recusado', CANCELLED: 'Cancelado' };
@@ -67,6 +72,10 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
   const [menuCategory, setMenuCategory] = useState<string>('');
   const [menuPage, setMenuPage] = useState(1);
   const [ownerSetupOpen, setOwnerSetupOpen] = useState(false);
+  const [cash, setCash] = useState<CashContext>();
+  const [cashAction, setCashAction] = useState<CashAction>();
+  const [cashForm, setCashForm] = useState({ amount: '', note: '' });
+  const [cashDeclared, setCashDeclared] = useState('');
   const selectedIdRef = useRef<string | undefined>(undefined);
   const refreshIdRef = useRef(0);
 
@@ -131,7 +140,18 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
     if (printer) setPrinterSettings(printer);
   }, []);
 
-  useEffect(() => { void load(); void loadSupport(); void refreshPrinter(); }, [load, loadSupport, refreshPrinter]);
+  const canCashAccess = ownerMode || user?.role === 'RESTAURANT_ADMIN' || ['CASHIER','MANAGER'].includes(user?.employeePosition ?? '') || Boolean(user?.permissions?.some((permission) => ['TABLES_PAYMENT','TABLES_CLOSE','TABLES_DISCOUNT'].includes(permission)));
+  const loadCash = useCallback(async (silent = false) => {
+    if (!canCashAccess) return;
+    try {
+      const result = await authenticatedRequest<CashContext>('/cash-register/current');
+      setCash(result);
+    } catch (error) {
+      if (!silent) setMessage(error instanceof Error ? error.message : 'Não foi possível carregar o caixa.');
+    }
+  }, [canCashAccess]);
+
+  useEffect(() => { void load(); void loadSupport(); void refreshPrinter(); void loadCash(); }, [load, loadSupport, refreshPrinter, loadCash]);
   useEffect(() => {
     if (ownerMode) return;
     if (['KITCHEN','BAR'].includes(user?.employeePosition ?? '')) { setWorkspace('KITCHEN'); setProductionFilter(user?.employeePosition === 'BAR' ? 'BAR' : 'KITCHEN'); }
@@ -146,6 +166,12 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
     const timer = window.setInterval(() => void refreshPrinter(), 3500);
     return () => window.clearInterval(timer);
   }, [refreshPrinter]);
+
+  useEffect(() => {
+    if (!canCashAccess) return;
+    const timer = window.setInterval(() => void loadCash(true), workspace === 'CASHIER' ? 2200 : 5000);
+    return () => window.clearInterval(timer);
+  }, [canCashAccess, loadCash, workspace]);
 
   const sessionByTable = useMemo(() => {
     const map = new Map<string, Session>();
@@ -172,9 +198,43 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
   async function run(action: () => Promise<unknown>, success?: string) {
     if (busy) return;
     setBusy(true); setMessage('');
-    try { await action(); if (success) setMessage(success); await load(true); }
+    try { await action(); if (success) setMessage(success); await Promise.all([load(true), loadCash(true)]); }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível concluir a ação.'); }
     finally { setBusy(false); }
+  }
+
+  const parseMoneyToCents = (value: string) => Math.round((Number(value.replace(',', '.')) || 0) * 100);
+  async function submitCashAction(event: FormEvent) {
+    event.preventDefault();
+    if (!cashAction || cashAction === 'HISTORY') return;
+    const amountCents = parseMoneyToCents(cashAction === 'CLOSE' ? cashDeclared : cashForm.amount);
+    const path = cashAction === 'OPEN' ? '/cash-register/open' : cashAction === 'SUPPLY' ? '/cash-register/supply' : cashAction === 'WITHDRAWAL' ? '/cash-register/withdrawal' : '/cash-register/close';
+    const body = cashAction === 'OPEN'
+      ? { openingAmountCents: amountCents, note: cashForm.note || undefined }
+      : cashAction === 'CLOSE'
+        ? { declaredCashCents: cashDeclared.trim() ? amountCents : undefined, note: cashForm.note || undefined }
+        : { amountCents, note: cashForm.note || undefined };
+    await run(async () => {
+      await authenticatedRequest(path, { method: 'POST', body: JSON.stringify(body) });
+      setCashAction(undefined); setCashForm({ amount: '', note: '' }); setCashDeclared('');
+    }, cashAction === 'OPEN' ? 'Caixa aberto.' : cashAction === 'SUPPLY' ? 'Suprimento registrado.' : cashAction === 'WITHDRAWAL' ? 'Sangria registrada.' : 'Caixa fechado.');
+  }
+  async function printCashSummary() {
+    if (!cash) return;
+    if (printerSettings?.printerEnabled && printerSettings.connected) {
+      const result = await authenticatedRequest<{queued?:boolean}>('/cash-register/print', { method: 'POST' });
+      if (result.queued) { setMessage('Resumo do caixa enviado para a impressora.'); return; }
+    }
+    browserPrint('Caixa', cashPrintLines(cash));
+    setMessage('Impressão do caixa aberta no navegador.');
+  }
+  async function printCashMovement(movement: CashMovement) {
+    if (printerSettings?.printerEnabled && printerSettings.connected) {
+      const result = await authenticatedRequest<{queued?:boolean}>(`/cash-register/movements/${movement._id}/print`, { method: 'POST' });
+      if (result.queued) { setMessage('Comprovante enviado para a impressora.'); return; }
+    }
+    browserPrint('Operação de caixa', cashMovementPrintLines(movement));
+    setMessage('Comprovante aberto no navegador.');
   }
 
   async function createTables(event: FormEvent) {
@@ -391,17 +451,38 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
     </>}
 
     {workspace==='CASHIER'&&<>
+      <section className="rounded-[24px] border border-stone-200/80 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-primary">💼 Controle de caixa</p><h2 className="mt-1 text-lg font-black">{cash?.shift ? 'Caixa aberto' : 'Caixa fechado'}</h2><p className="mt-1 text-xs text-stone-500">Abertura, suprimento, sangria, conferência, fechamento e impressão sem sair da operação.</p></div>
+          <div className="flex flex-wrap gap-2">
+            {!cash?.shift&&<><button type="button" onClick={()=>{setCashForm({amount:'0',note:''});setCashAction('OPEN')}} className="rounded-xl bg-success px-4 py-2.5 text-xs font-black text-white">🔓 Abrir caixa</button>{cash?.lastClosed&&<button type="button" onClick={()=>void printCashSummary()} className="rounded-xl border bg-white px-3 py-2.5 text-xs font-black">🖨️ Último fechamento</button>}</>}
+            {cash?.shift&&<><button type="button" onClick={()=>{setCashForm({amount:'',note:''});setCashAction('SUPPLY')}} className="rounded-xl border bg-white px-3 py-2.5 text-xs font-black">➕ Suprimento</button><button type="button" onClick={()=>{setCashForm({amount:'',note:''});setCashAction('WITHDRAWAL')}} className="rounded-xl border bg-white px-3 py-2.5 text-xs font-black">➖ Sangria</button><button type="button" onClick={()=>setCashAction('HISTORY')} className="rounded-xl border bg-white px-3 py-2.5 text-xs font-black">📋 Operações</button><button type="button" onClick={()=>void printCashSummary()} className="rounded-xl border bg-white px-3 py-2.5 text-xs font-black">🖨️ Imprimir</button><button type="button" onClick={()=>{setCashDeclared((cash.summary.expectedCashCents/100).toFixed(2));setCashForm({amount:'',note:''});setCashAction('CLOSE')}} className="rounded-xl bg-ink px-4 py-2.5 text-xs font-black text-white">🔒 Fechar caixa</button></>}
+          </div>
+        </div>
+        {cash?.shift?<>
+          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+            <CashMetric icon="💵" label="Dinheiro esperado" value={money(cash.summary.expectedCashCents)} strong/>
+            <CashMetric icon="🟢" label="Vendas em dinheiro" value={money(cash.summary.cashSalesCents)}/>
+            <CashMetric icon="⚡" label="PIX" value={money(cash.summary.pixSalesCents)}/>
+            <CashMetric icon="💳" label="Crédito" value={money(cash.summary.creditSalesCents)}/>
+            <CashMetric icon="💳" label="Débito" value={money(cash.summary.debitSalesCents)}/>
+            <CashMetric icon="📈" label="Vendas no turno" value={money(cash.summary.salesCents)}/>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl bg-background px-4 py-3 text-xs text-stone-600"><span>🕒 Aberto {new Date(cash.shift.openedAt).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</span><span>💰 Fundo {money(cash.summary.openingAmountCents)}</span><span>➕ Suprimentos {money(cash.summary.supplyCents)}</span><span>➖ Sangrias {money(cash.summary.withdrawalCents)}</span></div>
+        </>:<div className="mt-4 rounded-2xl border border-dashed bg-background p-4 text-sm text-stone-600"><b className="text-ink">Abra o caixa antes de receber pagamentos.</b>{cash?.lastClosed?.shift&&<p className="mt-1 text-xs">Último fechamento: {new Date(cash.lastClosed.shift.closedAt??cash.lastClosed.shift.openedAt).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})} · Esperado {money(cash.lastClosed.summary.expectedCashCents)}.</p>}</div>}
+      </section>
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white/80 p-3 shadow-sm">
-        <div><h2 className="text-lg font-black">💳 Contas solicitadas</h2><p className="text-xs text-stone-500">O caixa mantém todas as funções: impressão, pagamentos, divisão, desconto e fechamento.</p></div>
-        <div className="flex items-center gap-2"><span className={`rounded-full px-3 py-2 text-xs font-black ${printerSettings?.connected?'bg-success/10 text-success':'bg-stone-100 text-stone-500'}`}>{printerSettings?.connected?'Printer online':'Printer offline'}</span><span className="rounded-full bg-gold/15 px-3 py-2 text-xs font-black">{cashierQueue.length} aguardando</span></div>
+        <div><h2 className="text-lg font-black">💳 Contas solicitadas</h2><p className="text-xs text-stone-500">Impressão, pagamentos, divisão, desconto e fechamento das mesas.</p></div>
+        <div className="flex items-center gap-2"><span className={`rounded-full px-3 py-2 text-xs font-black ${printerSettings?.connected?'bg-success/10 text-success':'bg-stone-100 text-stone-500'}`}>{printerSettings?.connected?'🖨️ Printer online':'Printer offline'}</span><span className="rounded-full bg-gold/15 px-3 py-2 text-xs font-black">{cashierQueue.length} aguardando</span></div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {cashierSlice.map((session)=><article key={session._id} className="rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase text-gold">Conta solicitada</p><h3 className="text-xl font-black">{sessionTableName(session,data.tables)}</h3><p className="mt-1 text-xs text-stone-500">{session.peopleCount} pessoa(s){typeof session.waiterId==='object'&&session.waiterId?.name?` · ${session.waiterId.name}`:''}</p></div><strong className="text-xl">{money(session.balanceCents)}</strong></div>
+        {cashierSlice.map((session)=><article key={session._id} className="rounded-[22px] border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase text-gold">🧾 Conta solicitada</p><h3 className="text-xl font-black">{sessionTableName(session,data.tables)}</h3><p className="mt-1 text-xs text-stone-500">{session.peopleCount} pessoa(s){typeof session.waiterId==='object'&&session.waiterId?.name?` · ${session.waiterId.name}`:''}</p></div><strong className="text-xl">{money(session.balanceCents)}</strong></div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center"><Metric label="Total" value={money(session.totalCents)}/><Metric label="Pago" value={money(session.paidCents)}/><Metric label="Saldo" value={money(session.balanceCents)}/></div>
-          <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={()=>void printBill(session)} className="rounded-xl border px-3 py-3 font-black">Imprimir</button><button type="button" onClick={()=>void openSessionDetail(session)} className="rounded-xl bg-ink px-3 py-3 font-black text-white">Abrir conta</button></div>
+          <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={()=>void printBill(session)} className="rounded-xl border px-3 py-3 font-black">🖨️ Pré-conta</button><button type="button" onClick={()=>void openSessionDetail(session)} className="rounded-xl bg-ink px-3 py-3 font-black text-white">💰 Receber</button></div>
         </article>)}
-        {!cashierSlice.length&&<div className="rounded-2xl border border-dashed bg-white p-10 text-center text-stone-500 md:col-span-2 xl:col-span-3"><strong className="block text-ink">Nenhuma conta aguardando</strong><span className="text-sm">Quando o garçom pedir a conta ela aparece aqui automaticamente.</span></div>}
+        {!cashierSlice.length&&<div className="rounded-2xl border border-dashed bg-white p-10 text-center text-stone-500 md:col-span-2 xl:col-span-3"><strong className="block text-ink">✅ Nenhuma conta aguardando</strong><span className="text-sm">Quando o garçom pedir a conta ela aparece aqui automaticamente.</span></div>}
       </div>
       <Pager page={visibleCashierPage} pages={cashierPages} setPage={setCashierPage}/>
     </>}
@@ -440,6 +521,21 @@ export function TablesWorkspace({ ownerMode = false }: { ownerMode?: boolean }) 
       </>}
     </Modal>}
 
+    {cashAction&&<Modal wide={cashAction==='HISTORY'} title={cashAction==='OPEN'?'Abrir caixa':cashAction==='SUPPLY'?'Registrar suprimento':cashAction==='WITHDRAWAL'?'Registrar sangria':cashAction==='CLOSE'?'Fechar caixa':'Operações do caixa'} close={()=>{setCashAction(undefined);setCashForm({amount:'',note:''});setCashDeclared('');setMessage('')}}>
+      {message&&<InlineNotice compact message={message} onClose={()=>setMessage('')} />}
+      {cashAction==='HISTORY'?<div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><CashMetric icon="💵" label="Esperado" value={money(cash?.summary.expectedCashCents??0)} strong/><CashMetric icon="➕" label="Suprimentos" value={money(cash?.summary.supplyCents??0)}/><CashMetric icon="➖" label="Sangrias" value={money(cash?.summary.withdrawalCents??0)}/><CashMetric icon="📈" label="Vendas" value={money(cash?.summary.salesCents??0)}/></div>
+        <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">{(cash?.movements??[]).map((movement)=><div key={movement._id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-background px-2.5 py-1 text-[10px] font-black">{cashMovementLabel(movement.type)}</span>{movement.method&&<span className="text-xs font-bold text-stone-500">{paymentLabel[movement.method]??movement.method}</span>}</div><p className="mt-1 text-xs text-stone-500">{new Date(movement.recordedAt).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}{movement.recordedBy&&typeof movement.recordedBy==='object'&&movement.recordedBy.name?` · ${movement.recordedBy.name}`:''}</p>{movement.note&&<p className="mt-1 text-xs text-stone-600">{movement.note}</p>}</div><div className="flex items-center gap-3"><strong className={movement.type==='WITHDRAWAL'?'text-danger':movement.type==='SUPPLY'?'text-success':'text-ink'}>{movement.type==='WITHDRAWAL'?'- ':''}{money(movement.amountCents)}</strong><button type="button" onClick={()=>void printCashMovement(movement)} className="grid h-9 w-9 place-items-center rounded-xl border bg-white" title="Imprimir comprovante">🖨️</button></div></div>)}{!(cash?.movements??[]).length&&<p className="rounded-2xl border border-dashed p-8 text-center text-sm text-stone-500">Nenhuma operação registrada neste caixa.</p>}</div>
+      </div>:<form onSubmit={submitCashAction} className="mx-auto grid max-w-2xl gap-4">
+        {cashAction==='CLOSE'?<><div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><CashMetric icon="💵" label="Esperado" value={money(cash?.summary.expectedCashCents??0)} strong/><CashMetric icon="➕" label="Suprimentos" value={money(cash?.summary.supplyCents??0)}/><CashMetric icon="➖" label="Sangrias" value={money(cash?.summary.withdrawalCents??0)}/></div><label className="font-bold">Dinheiro contado na gaveta (R$)<input autoFocus min="0" step="0.01" type="number" className="field" value={cashDeclared} onChange={(e)=>setCashDeclared(e.target.value)}/></label>{cashDeclared&&<div className={`rounded-2xl p-3 text-sm font-bold ${parseMoneyToCents(cashDeclared)===(cash?.summary.expectedCashCents??0)?'bg-success/10 text-success':'bg-gold/15 text-ink'}`}>Diferença: {money(parseMoneyToCents(cashDeclared)-(cash?.summary.expectedCashCents??0))}</div>}</>:<label className="font-bold">{cashAction==='OPEN'?'Fundo inicial':'Valor'} (R$)<input autoFocus required min={cashAction==='OPEN'?'0':'0.01'} step="0.01" type="number" className="field" value={cashForm.amount} onChange={(e)=>setCashForm({...cashForm,amount:e.target.value})}/></label>}
+        <label className="font-bold">Observação (opcional)<input className="field" value={cashForm.note} onChange={(e)=>setCashForm({...cashForm,note:e.target.value})} placeholder={cashAction==='SUPPLY'?'Ex.: troco adicional':cashAction==='WITHDRAWAL'?'Ex.: retirada para cofre':cashAction==='CLOSE'?'Ex.: conferido por Carlos':'Ex.: abertura do turno'}/></label>
+        {cashAction==='OPEN'&&<div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setCashForm({...cashForm,amount:'0'})} className="rounded-xl border px-3 py-2 text-xs font-black">Sem fundo</button>{['50','100','200'].map((value)=><button key={value} type="button" onClick={()=>setCashForm({...cashForm,amount:value})} className="rounded-xl border px-3 py-2 text-xs font-black">R$ {value}</button>)}</div>}
+        {cashAction==='SUPPLY'&&<div className="flex flex-wrap gap-2">{['20','50','100','200'].map((value)=><button key={value} type="button" onClick={()=>setCashForm({...cashForm,amount:value})} className="rounded-xl border px-3 py-2 text-xs font-black">R$ {value}</button>)}</div>}
+        {cashAction==='WITHDRAWAL'&&<div className="flex flex-wrap gap-2">{['50','100','200'].map((value)=><button key={value} type="button" onClick={()=>setCashForm({...cashForm,amount:value})} className="rounded-xl border px-3 py-2 text-xs font-black">R$ {value}</button>)}</div>}
+        <button disabled={busy} className={`rounded-xl px-4 py-3 font-black text-white ${cashAction==='WITHDRAWAL'||cashAction==='CLOSE'?'bg-ink':'bg-success'}`}>{cashAction==='OPEN'?'Abrir caixa':cashAction==='SUPPLY'?'Confirmar suprimento':cashAction==='WITHDRAWAL'?'Confirmar sangria':'Conferir e fechar caixa'}</button>
+      </form>}
+    </Modal>}
+
     {ownerSetupOpen&&<Modal wide title="Configurar mesas" close={()=>setOwnerSetupOpen(false)}>{message&&<InlineNotice compact message={message} onClose={()=>setMessage('')} />}<div className="grid gap-4 lg:grid-cols-2"><form onSubmit={createTables} className="rounded-2xl border p-4"><h3 className="font-black">Criar várias mesas</h3><div className="mt-3 grid grid-cols-2 gap-2"><label className="text-sm font-bold">De<input className="field" type="number" min="1" value={bulk.from} onChange={(e)=>setBulk({...bulk,from:e.target.value})}/></label><label className="text-sm font-bold">Até<input className="field" type="number" min="1" value={bulk.to} onChange={(e)=>setBulk({...bulk,to:e.target.value})}/></label><label className="text-sm font-bold">Prefixo<input className="field" value={bulk.prefix} onChange={(e)=>setBulk({...bulk,prefix:e.target.value})}/></label><label className="text-sm font-bold">Capacidade<input className="field" type="number" min="1" value={bulk.capacity} onChange={(e)=>setBulk({...bulk,capacity:e.target.value})}/></label></div><button disabled={busy} className="mt-3 w-full rounded-xl bg-ink px-4 py-3 font-black text-white">Criar mesas</button></form><form onSubmit={updateTable} className="rounded-2xl border p-4"><h3 className="font-black">Editar mesa</h3><div className="mt-3 grid gap-2"><select className="field !mt-0" value={manageTable.id} onChange={(e)=>{const table=data.tables.find((item)=>item._id===e.target.value);setManageTable(table?{id:table._id,name:table.name,capacity:String(table.capacity),active:table.active}:{id:'',name:'',capacity:'4',active:true})}}><option value="">Selecione…</option>{data.tables.map((table)=><option key={table._id} value={table._id}>{table.name}</option>)}</select><input disabled={!manageTable.id} className="field !mt-0" placeholder="Nome" value={manageTable.name} onChange={(e)=>setManageTable({...manageTable,name:e.target.value})}/><div className="grid grid-cols-2 gap-2"><input disabled={!manageTable.id} min="1" type="number" className="field !mt-0" value={manageTable.capacity} onChange={(e)=>setManageTable({...manageTable,capacity:e.target.value})}/><label className="flex items-center justify-between rounded-xl border px-3 font-bold">Ativa <input disabled={!manageTable.id} type="checkbox" checked={manageTable.active} onChange={(e)=>setManageTable({...manageTable,active:e.target.checked})}/></label></div></div><button disabled={busy||!manageTable.id} className="mt-3 w-full rounded-xl border px-4 py-3 font-black">Salvar mesa</button></form></div></Modal>}
 
     {printerSetupOpen&&<Modal title="Menu Flow Printer" close={()=>{setPrinterSetupOpen(false);setPrinterToken('')}}>{message&&<InlineNotice compact message={message} onClose={()=>setMessage('')} />}<div className="space-y-3"><div className={`rounded-xl p-3 ${printerSettings?.connected?'bg-success/10':'bg-background'}`}><strong>{printerSettings?.connected?'Printer conectado':'Printer ainda não conectado'}</strong><p className="text-xs text-stone-500">{printerSettings?.connected?`${printerSettings.printerDeviceName||'Computador'} online.`:'Instale o agente no Windows e gere a chave.'}</p></div><label className="flex items-center justify-between gap-3 rounded-xl border p-3 font-bold"><span>Ativar Menu Flow Printer</span><input type="checkbox" checked={Boolean(printerSettings?.printerEnabled)} onChange={(e)=>void savePrinterSettings({printerEnabled:e.target.checked})}/></label><label className="flex items-center justify-between gap-3 rounded-xl border p-3 font-bold"><span><b>Imprimir pedidos automaticamente</b><small className="block font-normal text-stone-500">Cozinha e bar são separados pelo cardápio.</small></span><input type="checkbox" checked={Boolean(printerSettings?.printerAutoKitchen)} onChange={(e)=>void savePrinterSettings({printerAutoKitchen:e.target.checked})}/></label><label className="flex items-center justify-between gap-3 rounded-xl border p-3 font-bold"><span>Pré-conta automática</span><input type="checkbox" checked={Boolean(printerSettings?.printerAutoBill)} onChange={(e)=>void savePrinterSettings({printerAutoBill:e.target.checked})}/></label><label className="font-bold">Papel<select className="field" value={printerSettings?.printerPaperWidth??80} onChange={(e)=>void savePrinterSettings({printerPaperWidth:Number(e.target.value) as 58|80})}><option value="80">80 mm</option><option value="58">58 mm</option></select></label><div className="rounded-xl border p-3"><div className="flex items-center justify-between gap-2"><div><strong>Chave do computador</strong><p className="text-xs text-stone-500">{printerSettings?.printerTokenLast4?`Termina em ${printerSettings.printerTokenLast4}`:'Ainda não gerada'}</p></div><button type="button" onClick={()=>void generatePrinterToken()} className="rounded-xl bg-ink px-3 py-2 text-sm font-black text-white">Gerar chave</button></div>{printerToken&&<code className="mt-3 block break-all rounded-lg bg-background p-2 text-xs font-bold">{printerToken}</code>}</div><p className="text-xs text-stone-500">No Menu Flow Printer, marque “mesma impressora para cozinha e bar” se o restaurante tiver somente uma impressora de produção.</p></div></Modal>}
@@ -457,6 +553,10 @@ function escapeHtml(value:string) { return String(value).replace(/[&<>"']/g,(cha
 function productCategory(product: Product) { return typeof product.categoryId === 'string' ? product.categoryId : product.categoryId._id; }
 function productPriceCents(product: Product) { return product.promotionalPriceCents ?? (product.promotionalPrice !== undefined ? Math.round(product.promotionalPrice * 100) : (product.priceCents ?? Math.round(product.price * 100))); }
 function tableTitle(session: Session) { const tables = session.tableIds.map((table) => typeof table === 'string' ? '' : table.name).filter(Boolean); return tables.length ? tables.join(' + ') : 'Comanda da mesa'; }
+function CashMetric({icon,label,value,strong=false}:{icon:string;label:string;value:string;strong?:boolean}) { return <div className={`rounded-2xl border p-3 ${strong?'border-primary/20 bg-primary/5':'border-stone-200 bg-background'}`}><div className="flex items-start justify-between gap-2"><span className="text-lg">{icon}</span><strong className={`text-sm ${strong?'text-primary':'text-ink'}`}>{value}</strong></div><p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</p></div>; }
+function cashMovementLabel(type: CashMovement['type']) { return ({OPENING:'🔓 Abertura',SUPPLY:'➕ Suprimento',WITHDRAWAL:'➖ Sangria',SALE:'💰 Venda'} as Record<string,string>)[type]??type; }
+function cashPrintLines(cash: CashContext) { const targetShift=cash.shift??cash.lastClosed?.shift??null; const s=cash.shift?cash.summary:(cash.lastClosed?.summary??cash.summary); const lines=['MENU FLOW - CAIXA',targetShift?.status==='CLOSED'?'FECHAMENTO':'MOVIMENTO','------------------------------']; if(targetShift) lines.push(`Abertura: ${new Date(targetShift.openedAt).toLocaleString('pt-BR')}`); if(targetShift?.closedAt) lines.push(`Fechamento: ${new Date(targetShift.closedAt).toLocaleString('pt-BR')}`); lines.push(`Fundo: ${money(s.openingAmountCents)}`,`Suprimentos: ${money(s.supplyCents)}`,`Sangrias: -${money(s.withdrawalCents)}`,`Dinheiro: ${money(s.cashSalesCents)}`,`PIX: ${money(s.pixSalesCents)}`,`Credito: ${money(s.creditSalesCents)}`,`Debito: ${money(s.debitSalesCents)}`,'------------------------------',`DINHEIRO ESPERADO: ${money(s.expectedCashCents)}`); if(targetShift?.status==='CLOSED'){lines.push(`DINHEIRO INFORMADO: ${money(targetShift.declaredCashCents??s.expectedCashCents)}`,`DIFERENCA: ${money(targetShift.differenceCents??0)}`);} lines.push('------------------------------','MENU FLOW'); return lines; }
+function cashMovementPrintLines(movement: CashMovement) { return ['MENU FLOW - CAIXA',cashMovementLabel(movement.type),new Date(movement.recordedAt).toLocaleString('pt-BR'),'------------------------------',movement.method?`Forma: ${paymentLabel[movement.method]??movement.method}`:'',`Valor: ${money(movement.amountCents)}`,movement.note?`Obs: ${movement.note}`:'','------------------------------','MENU FLOW'].filter(Boolean); }
 function Metric({label,value}:{label:string;value:string}) { return <div className="rounded-2xl border border-stone-200/70 bg-background p-3 shadow-sm"><span className="text-xs font-bold text-stone-500">{label}</span><strong className="mt-1 block text-lg">{value}</strong></div>; }
 function Row({label,value,strong=false}:{label:string;value:string;strong?:boolean}) { return <div className={`flex items-center justify-between gap-4 ${strong?'font-black':''}`}><dt>{label}</dt><dd>{value}</dd></div>; }
 function Modal({title,close,children,wide=false}:{title:string;close:()=>void;children:React.ReactNode;wide?:boolean}) { return <div className="fixed inset-0 z-[80] overflow-y-auto bg-black/60 p-2 sm:p-5" onClick={close}><div className={`mx-auto my-3 rounded-[28px] border border-stone-200 bg-white p-4 shadow-2xl sm:p-5 ${wide?'max-w-6xl':'max-w-xl'}`} onClick={(event)=>event.stopPropagation()}><div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="text-lg font-black sm:text-xl">{title}</h2><p className="text-xs text-stone-500">Tudo em uma única janela, sem abrir várias telas.</p></div><button type="button" onClick={(event)=>{event.preventDefault();event.stopPropagation();close();}} className="grid h-10 w-10 place-items-center rounded-full bg-stone-100 font-black">×</button></div>{children}</div></div>; }
